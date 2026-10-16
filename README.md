@@ -12,6 +12,16 @@ npm run dev
 
 افتح http://localhost:3000.
 
+## ربط Supabase
+
+انسخ `.env.example` إلى `.env.local` ثم استبدل قيمة
+`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` بالمفتاح العام من لوحة Supabase.
+ملف `.env.local` مستثنى من Git ولا ينبغي رفعه إلى المستودع.
+
+طبقتا الاتصال موجودتان في `src/lib/supabase/client.ts` للمتصفح و
+`src/lib/supabase/server.ts` للخادم. إنشاء الجداول وسياسات الوصول يأتي بعد
+تثبيت نموذج البيانات، ولا توجد جداول إنتاجية أنشأها التطبيق حتى الآن.
+
 ## الفحوص
 ~~~sh
 npm run lint
@@ -24,7 +34,8 @@ npm run build
 ## حالة التنفيذ
 - أساس Next.js وTypeScript وTailwind CSS وصفحة بداية عربية.
 - إعداد فحوص GitHub Actions.
-- وظائف المنتج وربط Supabase والنشر على Vercel لم تُنفذ بعد.
+- جُهّز اتصال Supabase، وينقصه المفتاح العام واختبار الاتصال.
+- وظائف المنتج والنشر على Vercel لم تُنفذ بعد.
 - لا تتضمن هذه النسخة اتصالًا بميناء أو أجهزة ميدانية.
 
 لا ترفع ملفات .env.local أو كلمات المرور أو مفاتيح الخدمات إلى GitHub.
