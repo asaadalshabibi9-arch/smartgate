@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "SmartGate | البوابة الذكية",
-  description: "منصة لتنظيم دخول الشاحنات إلى الميناء",
+  description: "نموذج تجريبي لتنظيم دخول الشاحنات إلى الميناء",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
