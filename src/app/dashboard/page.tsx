@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { createClient } from "@/lib/supabase/server";
 
@@ -11,9 +12,25 @@ const statusLabels = {
   out_of_service: "خارج الخدمة",
 } as const;
 
-export const instant = false;
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<DashboardLoading />}>
+      <DashboardContent />
+    </Suspense>
+  );
+}
 
-export default async function DashboardPage() {
+function DashboardLoading() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#eef4f6] px-5 text-[#112a46]">
+      <div className="rounded-2xl bg-white px-8 py-6 font-bold shadow-sm">
+        جارٍ التحقق من الجلسة وتحميل لوحة التشغيل…
+      </div>
+    </main>
+  );
+}
+
+async function DashboardContent() {
   const supabase = await createClient();
   const { data: claimsData } = await supabase.auth.getClaims();
   const userId = claimsData?.claims?.sub;
