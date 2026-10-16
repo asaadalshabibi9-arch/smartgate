@@ -145,9 +145,13 @@ create index profiles_company_id_idx on public.profiles(company_id);
 create index trucks_company_id_idx on public.trucks(company_id);
 create index trips_company_id_idx on public.trips(company_id);
 create index trips_driver_profile_id_idx on public.trips(driver_profile_id);
+create index trips_truck_id_idx on public.trips(truck_id);
 create index trips_gate_id_idx on public.trips(gate_id);
+create index trips_created_by_idx on public.trips(created_by);
 create index trips_status_idx on public.trips(status);
 create index trip_events_trip_occurred_idx on public.trip_events(trip_id, occurred_at);
+create index trip_events_actor_profile_id_idx on public.trip_events(actor_profile_id);
+create index trip_events_gate_id_idx on public.trip_events(gate_id);
 create index notifications_trip_id_idx on public.notifications(trip_id);
 create index notifications_recipient_idx on public.notifications(recipient_profile_id);
 
@@ -224,14 +228,38 @@ as $$
   select exists (
     select 1
     from public.trips t
+    join public.profiles p on p.user_id = (select auth.uid())
     where t.id = target_trip_id
       and (
-        private.current_role() in ('gate_operator', 'demo_admin')
-        or t.company_id = private.current_company_id()
-        or t.driver_profile_id = private.current_profile_id()
+        p.role in ('gate_operator', 'demo_admin')
+        or t.company_id = p.company_id
+        or t.driver_profile_id = p.id
       )
   );
 $$;
+
+create function private.guard_trip_completion()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.status = 'completed'
+     and old.status <> 'completed'
+     and coalesce(
+       current_setting('smartgate.crossing_confirmed', true),
+       'false'
+     ) <> 'true' then
+    raise exception 'A trip can only be completed by a crossing confirmation event';
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger trips_guard_completion
+before update on public.trips
+for each row execute function private.guard_trip_completion();
 
 create function private.complete_trip_after_crossing()
 returns trigger
@@ -241,9 +269,11 @@ set search_path = ''
 as $$
 begin
   if new.event_type = 'crossing_confirmed' then
-    if private.current_role() not in ('gate_operator', 'demo_admin') then
+    if (select private.current_role()) not in ('gate_operator', 'demo_admin') then
       raise exception 'Only a gate operator can confirm crossing';
     end if;
+
+    perform set_config('smartgate.crossing_confirmed', 'true', true);
 
     update public.trips
     set status = 'completed',
@@ -271,19 +301,19 @@ alter table public.notifications enable row level security;
 create policy companies_select on public.companies
 for select to authenticated
 using (
-  id = private.current_company_id()
-  or private.current_role() in ('gate_operator', 'demo_admin')
+  id = (select private.current_company_id())
+  or (select private.current_role()) in ('gate_operator', 'demo_admin')
 );
 
 create policy companies_update on public.companies
 for update to authenticated
 using (
-  id = private.current_company_id()
-  and private.current_role() = 'company_admin'
+  id = (select private.current_company_id())
+  and (select private.current_role()) = 'company_admin'
 )
 with check (
-  id = private.current_company_id()
-  and private.current_role() = 'company_admin'
+  id = (select private.current_company_id())
+  and (select private.current_role()) = 'company_admin'
 );
 
 create policy profiles_select on public.profiles
@@ -291,10 +321,10 @@ for select to authenticated
 using (
   user_id = (select auth.uid())
   or (
-    company_id = private.current_company_id()
-    and private.current_role() = 'company_admin'
+    company_id = (select private.current_company_id())
+    and (select private.current_role()) = 'company_admin'
   )
-  or private.current_role() in ('gate_operator', 'demo_admin')
+  or (select private.current_role()) in ('gate_operator', 'demo_admin')
 );
 
 create policy profiles_update_self on public.profiles
@@ -302,26 +332,26 @@ for update to authenticated
 using (user_id = (select auth.uid()))
 with check (
   user_id = (select auth.uid())
-  and role = private.current_role()
-  and company_id is not distinct from private.current_company_id()
+  and role = (select private.current_role())
+  and company_id is not distinct from (select private.current_company_id())
 );
 
 create policy trucks_select on public.trucks
 for select to authenticated
 using (
-  company_id = private.current_company_id()
-  or private.current_role() in ('gate_operator', 'demo_admin')
+  company_id = (select private.current_company_id())
+  or (select private.current_role()) in ('gate_operator', 'demo_admin')
 );
 
 create policy trucks_manage on public.trucks
 for all to authenticated
 using (
-  company_id = private.current_company_id()
-  and private.current_role() = 'company_admin'
+  company_id = (select private.current_company_id())
+  and (select private.current_role()) = 'company_admin'
 )
 with check (
-  company_id = private.current_company_id()
-  and private.current_role() = 'company_admin'
+  company_id = (select private.current_company_id())
+  and (select private.current_role()) = 'company_admin'
 );
 
 create policy gates_select on public.gates
@@ -329,8 +359,8 @@ for select to authenticated using (true);
 
 create policy gates_update on public.gates
 for update to authenticated
-using (private.current_role() in ('gate_operator', 'demo_admin'))
-with check (private.current_role() in ('gate_operator', 'demo_admin'));
+using ((select private.current_role()) in ('gate_operator', 'demo_admin'))
+with check ((select private.current_role()) in ('gate_operator', 'demo_admin'));
 
 create policy trips_select on public.trips
 for select to authenticated using (private.can_access_trip(id));
@@ -338,10 +368,10 @@ for select to authenticated using (private.can_access_trip(id));
 create policy trips_insert on public.trips
 for insert to authenticated
 with check (
-  private.current_role() in ('company_admin', 'demo_admin')
+  (select private.current_role()) in ('company_admin', 'demo_admin')
   and (
-    company_id = private.current_company_id()
-    or private.current_role() = 'demo_admin'
+    company_id = (select private.current_company_id())
+    or (select private.current_role()) = 'demo_admin'
   )
 );
 
@@ -349,17 +379,17 @@ create policy trips_update on public.trips
 for update to authenticated
 using (
   (
-    company_id = private.current_company_id()
-    and private.current_role() = 'company_admin'
+    company_id = (select private.current_company_id())
+    and (select private.current_role()) = 'company_admin'
   )
-  or private.current_role() in ('gate_operator', 'demo_admin')
+  or (select private.current_role()) in ('gate_operator', 'demo_admin')
 )
 with check (
   (
-    company_id = private.current_company_id()
-    and private.current_role() = 'company_admin'
+    company_id = (select private.current_company_id())
+    and (select private.current_role()) = 'company_admin'
   )
-  or private.current_role() in ('gate_operator', 'demo_admin')
+  or (select private.current_role()) in ('gate_operator', 'demo_admin')
 );
 
 create policy trip_events_select on public.trip_events
@@ -369,23 +399,23 @@ create policy trip_events_insert on public.trip_events
 for insert to authenticated
 with check (
   private.can_access_trip(trip_id)
-  and actor_profile_id = private.current_profile_id()
+  and actor_profile_id = (select private.current_profile_id())
   and (
-    private.current_role() = 'demo_admin'
+    (select private.current_role()) = 'demo_admin'
     or (
-      private.current_role() = 'driver'
+      (select private.current_role()) = 'driver'
       and event_type in (
         'trip_started', 'arrival_reported', 'recommendation_accepted'
       )
     )
     or (
-      private.current_role() = 'company_admin'
+      (select private.current_role()) = 'company_admin'
       and event_type in (
         'trip_created', 'recommendation_accepted', 'exception_recorded'
       )
     )
     or (
-      private.current_role() = 'gate_operator'
+      (select private.current_role()) = 'gate_operator'
       and event_type in (
         'verification_passed', 'verification_failed',
         'barrier_open_requested', 'barrier_opened', 'barrier_failed',
@@ -398,7 +428,7 @@ with check (
 create policy notifications_select on public.notifications
 for select to authenticated
 using (
-  recipient_profile_id = private.current_profile_id()
+  recipient_profile_id = (select private.current_profile_id())
   or private.can_access_trip(trip_id)
 );
 
@@ -406,20 +436,26 @@ create policy notifications_insert on public.notifications
 for insert to authenticated
 with check (
   private.can_access_trip(trip_id)
-  and private.current_role() in ('company_admin', 'gate_operator', 'demo_admin')
+  and (select private.current_role()) in ('company_admin', 'gate_operator', 'demo_admin')
 );
 
 revoke all on all tables in schema public from anon;
-grant select, insert, update, delete on public.companies to authenticated;
-grant select, insert, update, delete on public.profiles to authenticated;
-grant select, insert, update, delete on public.trucks to authenticated;
-grant select, insert, update, delete on public.gates to authenticated;
-grant select, insert, update, delete on public.trips to authenticated;
+grant select, update on public.companies to authenticated;
+grant select, update on public.profiles to authenticated;
+grant select, insert, update on public.trucks to authenticated;
+grant select, update on public.gates to authenticated;
+grant select, insert, update on public.trips to authenticated;
 grant select, insert on public.trip_events to authenticated;
 grant select, insert, update on public.notifications to authenticated;
 grant usage, select on all sequences in schema public to authenticated;
+revoke execute on function public.set_updated_at() from public, anon, authenticated;
+revoke all on schema private from public, anon;
+revoke execute on all functions in schema private from public, anon, authenticated;
 grant usage on schema private to authenticated;
-grant execute on all functions in schema private to authenticated;
+grant execute on function private.current_role() to authenticated;
+grant execute on function private.current_company_id() to authenticated;
+grant execute on function private.current_profile_id() to authenticated;
+grant execute on function private.can_access_trip(uuid) to authenticated;
 
 comment on table public.trips is
   'SmartGate entry trips. A trip can only become completed after crossing confirmation.';
