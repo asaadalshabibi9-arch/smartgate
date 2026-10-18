@@ -82,7 +82,7 @@ async function command(
 beforeAll(async () => {
   // PGlite runs PostgreSQL with the same roles/RLS/functions; Auth JWT context is injected only in this harness.
   await db.exec(
-    `create role anon; create role authenticated; create schema auth; create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb,raw_app_meta_data jsonb); create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$; grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated; create function public.rls_auto_enable() returns void language sql as $$select$$;`,
+    `create role anon; create role authenticated; create role supabase_auth_admin; create schema auth; create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb,raw_app_meta_data jsonb); create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$; grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated; create function public.rls_auto_enable() returns void language sql as $$select$$;`,
   );
   for (const f of readdirSync("supabase/migrations")
     .filter((x) => x.endsWith(".sql"))
@@ -385,7 +385,7 @@ test("FR14 reset is privileged and preserves its audit snapshot", async () => {
 
 test("A10 provisioning guard blocks Auth-service account creation and profile escalation", async () => {
   await db.exec(
-    "create role supabase_auth_admin; grant usage on schema auth to supabase_auth_admin; grant insert on auth.users to supabase_auth_admin; set role supabase_auth_admin;",
+    "grant usage on schema auth to supabase_auth_admin; grant insert,update on auth.users to supabase_auth_admin; set role supabase_auth_admin;",
   );
   try {
     await expect(
@@ -501,8 +501,11 @@ test("A14 administration capability is explicit, audited and idempotent", async 
 });
 
 test("A14 trusted managed provisioning is allowed without reopening public signup", async () => {
-  const uid = randomUUID(),
+  const email = "managed-driver@example.test";
+  const reserved = await as("sim", "select public.administration_command('reserve_account',$1,$2) result", [{email,full_name:"Managed driver",role:"driver",company_id:ids.company,locale:"hi"},randomUUID()]);
+  const uid = (reserved[0].result as {id:string}).id,
     key = uid;
+  await expect(as("driver","select private.is_reserved_auth_identity($1,$2)",[uid,email])).rejects.toThrow("permission denied");
   await db.exec("set role supabase_auth_admin");
   try {
     await expect(
@@ -517,10 +520,10 @@ test("A14 trusted managed provisioning is allowed without reopening public signu
         { smartgate_managed: true, provisioning_key: randomUUID() },
       ]),
     ).rejects.toThrow("public_signup_disabled");
-    await db.query(
-      "insert into auth.users(id,raw_app_meta_data) values($1,$2)",
-      [uid, { smartgate_managed: true, provisioning_key: key }],
-    );
+    await expect(db.query("insert into auth.users(id,email) values($1,$2)",[uid,"wrong@example.test"])).rejects.toThrow("public_signup_disabled");
+    await expect(db.query("insert into auth.users(id,email,raw_app_meta_data) values($1,$2,$3)",[randomUUID(),email,{smartgate_managed:true,provisioning_key:key}])).rejects.toThrow("public_signup_disabled");
+    // Actual GoTrue order: insert first, then update app_metadata in the transaction.
+    await db.query("insert into auth.users(id,email) values($1,$2)",[uid,email]);
   } finally {
     await db.exec("reset role");
   }
@@ -531,6 +534,8 @@ test("A14 trusted managed provisioning is allowed without reopening public signu
     company_id: ids.company,
     locale: "hi",
   };
+  await expect(as("sim", "select public.administration_command('profile',$1,$2)", [payload,key])).rejects.toThrow("invalid_input");
+  await db.query("update auth.users set raw_app_meta_data=$1 where id=$2",[{smartgate_managed:true,provisioning_key:key},uid]);
   await as("sim", "select public.administration_command('profile',$1,$2)", [
     payload,
     key,

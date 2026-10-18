@@ -151,7 +151,15 @@ export async function administrationAction(
             provisioning_key: accountId,
           },
         });
-        if (created.error || !created.data.user) return { error: "adminError" };
+        if (created.error || !created.data.user) {
+          // Diagnose provider failures without logging credentials, emails or payloads.
+          console.warn("smartgate_account_provision_failed", {
+            stage: "create_user",
+            code: created.error?.code ?? "missing_user",
+            status: created.error?.status ?? 0,
+          });
+          return { error: "adminError" };
+        }
         user = created.data.user;
       }
       if (
