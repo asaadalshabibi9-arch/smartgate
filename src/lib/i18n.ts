@@ -1,9 +1,127 @@
-export const locales = ["ar", "en"] as const;
+import { translatedRows } from "./translations.ts";
+export const locales = [
+  "ar",
+  "en",
+  "hi",
+  "ur",
+  "bn",
+  "ml",
+  "ta",
+  "ne",
+] as const;
 export type Locale = (typeof locales)[number];
+export const languageNames: Record<Locale, string> = {
+  ar: "العربية",
+  en: "English",
+  hi: "हिन्दी",
+  ur: "اردو",
+  bn: "বাংলা",
+  ml: "മലയാളം",
+  ta: "தமிழ்",
+  ne: "नेपाली",
+};
+export function isLocale(value: string): value is Locale {
+  return (locales as readonly string[]).includes(value);
+}
+export function direction(locale: Locale) {
+  return locale === "ar" || locale === "ur" ? "rtl" : "ltr";
+}
 export function localeOf(value: string): Locale {
-  return value === "en" ? "en" : "ar";
+  return isLocale(value) ? value : "ar";
 }
 export const copy = {
+  latitude: ["خط العرض", "Latitude"],
+  longitude: ["خط الطول", "Longitude"],
+  gateCoordinates: ["إحداثيات البوابات المرجعية", "Gate reference coordinates"],
+  saveCoordinates: ["حفظ الإحداثيات", "Save coordinates"],
+  clearCoordinates: [
+    "اترك الحقلين فارغين لمسح الإحداثيات.",
+    "Leave both fields blank to clear coordinates.",
+  ],
+  mapConfiguredHint: [
+    "مواقع مرجعية يهيئها المسؤول، وليست بيانات أجهزة ميدانية. لا تحسب الخريطة مسارًا أو وقت وصول فعليًا.",
+    "Reference locations configured by an administrator, not field-device data. The map does not calculate a real route or arrival time.",
+  ],
+  administration: ["إدارة المنصة", "Platform administration"],
+  administrationHint: [
+    "إضافة بيانات العرض والحسابات وإسناد البوابات بصلاحية إدارة مستقلة. كل تعديل يسجل للتدقيق.",
+    "Add demo records, provision accounts and assign gates with explicit administrative authority. Every change is audited.",
+  ],
+  companies: ["الشركات", "Companies"],
+  accounts: ["الحسابات والسائقون", "Accounts and drivers"],
+  trucks: ["الشاحنات", "Trucks"],
+  companyName: ["اسم الشركة", "Company name"],
+  fullName: ["الاسم الكامل", "Full name"],
+  accountRole: ["دور الحساب", "Account role"],
+  createCompany: ["إضافة شركة", "Add company"],
+  createAccount: ["إضافة حساب مجهز", "Provision account"],
+  createTruck: ["إضافة شاحنة", "Add truck"],
+  vehicleType: ["نوع الشاحنة", "Vehicle type"],
+  plateNumber: ["رقم اللوحة", "Plate number"],
+  assignGate: ["إسناد بوابة", "Assign gate"],
+  unassignGate: ["إلغاء إسناد البوابة", "Unassign gate"],
+  assignments: ["إسناد مشغلي البوابات", "Gate operator assignments"],
+  administrationAudit: ["سجل إجراءات الإدارة", "Administration history"],
+  adminNotConfigured: [
+    "إنشاء الحسابات غير متاح حاليًا. تواصل مع مسؤول إعداد المنصة.",
+    "Account provisioning is unavailable. Contact the platform setup administrator.",
+  ],
+  adminError: [
+    "تعذر تأكيد حفظ التغيير. راجع السجل وحدّث الصفحة قبل إعادة المحاولة بنفس الطلب.",
+    "Unable to confirm the change. Review the history and refresh before retrying the same request.",
+  ],
+  passwordHint: [
+    "١٦ حرفًا على الأقل. سلّم بيانات الدخول للمستخدم عبر قناة آمنة؛ لا تُرسل كلمة المرور بالبريد من هنا.",
+    "At least 16 characters. Share credentials securely; passwords are not emailed here.",
+  ],
+  liveConnecting: [
+    "جارٍ ربط التحديثات؛ تحديث تلقائي كل ٢٠ ثانية",
+    "Connecting updates; automatic refresh every 20 seconds",
+  ],
+  liveConnected: ["قناة التحديثات متصلة", "Update channel connected"],
+  liveFallback: [
+    "القناة غير متاحة؛ تحديث تلقائي كل ٢٠ ثانية",
+    "Channel unavailable; automatic refresh every 20 seconds",
+  ],
+  liveOffline: [
+    "لا يوجد اتصال؛ البيانات المعروضة قديمة",
+    "Offline; displayed data may be stale",
+  ],
+  language: ["اللغة", "Language"],
+  scanQr: ["قراءة QR بالكاميرا", "Scan QR with camera"],
+  stopCamera: ["إيقاف الكاميرا", "Stop camera"],
+  cameraError: [
+    "تعذر تشغيل الكاميرا. تحقق من الإذن أو أدخل المرجع يدويًا.",
+    "Camera unavailable. Check permission or enter the reference manually.",
+  ],
+  scanHint: [
+    "تُعالج الصورة داخل جهازك. القراءة تملأ المرجع فقط؛ التحقق والفتح والعبور إجراءات مستقلة.",
+    "Images are processed on your device. Scanning fills the reference only; verification, opening and crossing are separate actions.",
+  ],
+  scanReady: [
+    "تمت قراءة المرجع. راجعه قبل التحقق.",
+    "Reference scanned. Review it before verification.",
+  ],
+  invalidQr: [
+    "الرمز ليس معرّف رحلة صالحًا. جرّب رمز SmartGate.",
+    "This code is not a valid journey reference. Try a SmartGate QR.",
+  ],
+  map: ["الخريطة", "Map"],
+  mapUnconfigured: [
+    "إحداثيات البوابات غير مهيأة. لا يتوفر مسار أو وقت وصول فعلي.",
+    "Gate coordinates are not configured. A real route or arrival time is unavailable.",
+  ],
+  locate: ["عرض موقعي", "Show my location"],
+  locationError: [
+    "تعذر تحديد الموقع. تحقق من الإذن والاتصال.",
+    "Location unavailable. Check permission and connectivity.",
+  ],
+  locationHint: [
+    "لا يُحفظ موقعك في المنصة. عند فتح الخريطة يرسل المتصفح المنطقة المعروضة إلى OpenStreetMap.",
+    "Your location is not saved by SmartGate. Opening the map sends the viewed area to OpenStreetMap.",
+  ],
+  openMap: ["فتح الخريطة الخارجية", "Open external map"],
+  accuracy: ["دقة الموقع التقريبية (متر)", "Approximate location accuracy (m)"],
   scenarios: ["سيناريوهات العرض", "Demo scenarios"],
   scenariosHint: [
     "حالات جاهزة للتجربة مع النتيجة المتوقعة وخطوات كل دور. كل الأحداث محاكاة معلنة.",
@@ -450,19 +568,39 @@ export const copy = {
   ],
 } as const;
 export type CopyKey = keyof typeof copy;
+export const dictionaries = Object.fromEntries(
+  locales.map((locale) => [
+    locale,
+    Object.fromEntries(
+      Object.entries(copy).map(([key, value]) => [
+        key,
+        value[locale === "ar" ? 0 : 1],
+      ]),
+    ),
+  ]),
+) as Record<Locale, Record<string, string>>;
+for (const row of translatedRows.split("\n")) {
+  const [key, ...values] = row.split("|");
+  if (values.length !== 6 || values.some((v) => !v.trim()))
+    throw new Error(`Invalid translation row: ${key}`);
+  locales.slice(2).forEach((locale, index) => {
+    dictionaries[locale][key] = values[index];
+  });
+}
 export function t(locale: Locale, key: string) {
-  return key in copy
-    ? copy[key as CopyKey][locale === "ar" ? 0 : 1]
-    : locale === "ar"
-      ? "حدث تجريبي"
-      : "Demo event";
+  return Object.hasOwn(dictionaries[locale], key)
+    ? dictionaries[locale][key]
+    : dictionaries[locale].simulated;
 }
 export function dateTime(locale: Locale, value: string | null) {
   return value
-    ? new Intl.DateTimeFormat(locale === "ar" ? "ar-OM" : "en-GB", {
-        dateStyle: "medium",
-        timeStyle: "short",
-        timeZone: "Asia/Muscat",
-      }).format(new Date(value))
+    ? new Intl.DateTimeFormat(
+        locale === "ar" ? "ar-OM" : locale === "en" ? "en-GB" : locale,
+        {
+          dateStyle: "medium",
+          timeStyle: "short",
+          timeZone: "Asia/Muscat",
+        },
+      ).format(new Date(value))
     : t(locale, "unavailable");
 }

@@ -1255,3 +1255,12 @@ td {
     font-size: 24px;
   }
 }
+/* A16/A17: browser tools and native script fallbacks retain the approved brand. */
+.language-controls { display: flex; align-items: center; gap: 8px; }
+.live-status { color: var(--muted); font-size: 12px; }
+.table-scroll { max-width: 100%; overflow-x: auto; }
+.table-scroll table { min-width: 640px; }
+.language-picker { max-width: 130px; min-width: 0; padding: 7px; font: inherit; border: 1px solid #D9E3EB; border-radius: 6px; background: white; color: #142D4E; }
+.qr-scanner video { width: 100%; max-height: 280px; margin-top: 12px; border-radius: 8px; background: #142D4E; }
+.location-map iframe { width: 100%; height: 350px; border: 1px solid #D9E3EB; margin-top: 16px; border-radius: 8px; }
+@media (max-width: 767px) { .language-controls { gap: 5px; } .language-controls svg { display: none; } .language-picker { max-width: 90px; } .top-actions .environment { display: none; } }

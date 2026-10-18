@@ -82,7 +82,7 @@ async function command(
 beforeAll(async () => {
   // PGlite runs PostgreSQL with the same roles/RLS/functions; Auth JWT context is injected only in this harness.
   await db.exec(
-    `create role anon; create role authenticated; create schema auth; create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb); create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$; grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated; create function public.rls_auto_enable() returns void language sql as $$select$$;`,
+    `create role anon; create role authenticated; create schema auth; create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb,raw_app_meta_data jsonb); create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$; grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated; create function public.rls_auto_enable() returns void language sql as $$select$$;`,
   );
   for (const f of readdirSync("supabase/migrations")
     .filter((x) => x.endsWith(".sql"))
@@ -399,4 +399,184 @@ test("A10 provisioning guard blocks Auth-service account creation and profile es
       ids.driver,
     ]),
   ).rejects.toThrow("permission denied");
+});
+
+test("A14 administration capability is explicit, audited and idempotent", async () => {
+  for (const role of ["sim", "admin", "driver", "operator"]) {
+    expect(
+      (await as(role, "select public.is_platform_administrator() allowed"))[0]
+        .allowed,
+    ).toBe(false);
+    await expect(
+      as(role, "select public.administration_overview()"),
+    ).rejects.toThrow("forbidden");
+    await expect(
+      as(role, "select public.administration_command('company',$1,$2)", [
+        { name: "Unauthorized" },
+        randomUUID(),
+      ]),
+    ).rejects.toThrow("forbidden");
+    await expect(
+      as(
+        role,
+        "insert into private.platform_administrators(user_id) values($1)",
+        [users[role]],
+      ),
+    ).rejects.toThrow("permission denied");
+  }
+  await db.query(
+    "insert into private.platform_administrators(user_id) values($1)",
+    [users.sim],
+  );
+  expect(
+    (await as("sim", "select public.is_platform_administrator() allowed"))[0]
+      .allowed,
+  ).toBe(true);
+  const key = randomUUID();
+  const result = await as(
+    "sim",
+    "select public.administration_command('company',$1,$2) result",
+    [{ name: "Managed company" }, key],
+  );
+  expect(
+    await as(
+      "sim",
+      "select public.administration_command('company',$1,$2) result",
+      [{ name: "Managed company" }, key],
+    ),
+  ).toEqual(result);
+  await expect(
+    as("sim", "select public.administration_command('company',$1,$2)", [
+      { name: "Changed input" },
+      key,
+    ]),
+  ).rejects.toThrow("idempotency_conflict");
+  expect(
+    await rows(
+      "select * from private.administration_audit where operation_key=$1",
+      [key],
+    ),
+  ).toHaveLength(1);
+  await expect(
+    as("sim", "select public.administration_command('assign_gate',$1,$2)", [
+      { profile_id: ids.driver, gate_id: ids.a },
+      randomUUID(),
+    ]),
+  ).rejects.toThrow("invalid_input");
+  const view = (
+    await as("sim", "select public.administration_overview() data")
+  )[0].data as { companies: unknown[] };
+  expect(view.companies).toHaveLength(3);
+  const reservationInput = {
+    email: "retry@example.test",
+    full_name: "Retry driver",
+    role: "driver",
+    company_id: ids.company,
+    locale: "hi",
+  };
+  const reservation = await as(
+    "sim",
+    "select public.administration_command('reserve_account',$1,$2) result",
+    [reservationInput, randomUUID()],
+  );
+  expect(
+    await as(
+      "sim",
+      "select public.administration_command('reserve_account',$1,$2) result",
+      [reservationInput, randomUUID()],
+    ),
+  ).toEqual(reservation);
+  await expect(
+    as("sim", "select public.administration_command('reserve_account',$1,$2)", [
+      { ...reservationInput, role: "demo_admin" },
+      randomUUID(),
+    ]),
+  ).rejects.toThrow("invalid_input");
+  await expect(
+    as("sim", "select public.administration_command('reserve_account',$1,$2)", [
+      { ...reservationInput, password: "never-record-this" },
+      randomUUID(),
+    ]),
+  ).rejects.toThrow("invalid_input");
+});
+
+test("A14 trusted managed provisioning is allowed without reopening public signup", async () => {
+  const uid = randomUUID(),
+    key = uid;
+  await db.exec("set role supabase_auth_admin");
+  try {
+    await expect(
+      db.query("insert into auth.users(id,raw_user_meta_data) values($1,$2)", [
+        uid,
+        { smartgate_managed: true, provisioning_key: key },
+      ]),
+    ).rejects.toThrow("public_signup_disabled");
+    await expect(
+      db.query("insert into auth.users(id,raw_app_meta_data) values($1,$2)", [
+        uid,
+        { smartgate_managed: true, provisioning_key: randomUUID() },
+      ]),
+    ).rejects.toThrow("public_signup_disabled");
+    await db.query(
+      "insert into auth.users(id,raw_app_meta_data) values($1,$2)",
+      [uid, { smartgate_managed: true, provisioning_key: key }],
+    );
+  } finally {
+    await db.exec("reset role");
+  }
+  const payload = {
+    user_id: uid,
+    full_name: "Managed driver",
+    role: "driver",
+    company_id: ids.company,
+    locale: "hi",
+  };
+  await as("sim", "select public.administration_command('profile',$1,$2)", [
+    payload,
+    key,
+  ]);
+  expect(
+    await rows(
+      "select role,locale,company_id from public.profiles where user_id=$1",
+      [uid],
+    ),
+  ).toEqual([{ role: "driver", locale: "hi", company_id: ids.company }]);
+  await expect(
+    as("driver", "select public.administration_command('profile',$1,$2)", [
+      payload,
+      randomUUID(),
+    ]),
+  ).rejects.toThrow("forbidden");
+});
+
+test("A16 configured map coordinates are paired, bounded, privileged and audited", async () => {
+  const run = (role: string, latitude: unknown, longitude: unknown) =>
+    as(role, "select public.administration_command('gate_coordinates',$1,$2)", [
+      { gate_id: ids.c, latitude, longitude },
+      randomUUID(),
+    ]);
+  await expect(run("driver", 23.6, 58.4)).rejects.toThrow("forbidden");
+  await expect(run("sim", 91, 58.4)).rejects.toThrow("gate_coordinate_pair");
+  await expect(run("sim", 23.6, null)).rejects.toThrow("gate_coordinate_pair");
+  await run("sim", 0, 0);
+  expect(
+    await as(
+      "driver",
+      "select latitude,longitude from public.gates where id=$1",
+      [ids.c],
+    ),
+  ).toEqual([{ latitude: 0, longitude: 0 }]);
+  await run("sim", null, null);
+  expect(
+    await rows("select latitude,longitude from public.gates where id=$1", [
+      ids.c,
+    ]),
+  ).toEqual([{ latitude: null, longitude: null }]);
+  expect(
+    (
+      await rows(
+        "select count(*)::int n from private.administration_audit where command='gate_coordinates'",
+      )
+    )[0].n,
+  ).toBe(2);
 });

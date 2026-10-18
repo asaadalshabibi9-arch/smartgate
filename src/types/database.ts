@@ -85,6 +85,8 @@ export type Database = {
       };
       gates: {
         Row: {
+          latitude: number | null;
+          longitude: number | null;
           code: string;
           created_at: string;
           eligible_operations: string[];
@@ -100,6 +102,8 @@ export type Database = {
         };
         Insert: {
           code: string;
+          latitude?: number | null;
+          longitude?: number | null;
           created_at?: string;
           eligible_operations?: string[];
           estimated_wait_minutes?: number | null;
@@ -114,6 +118,8 @@ export type Database = {
         };
         Update: {
           code?: string;
+          latitude?: number | null;
+          longitude?: number | null;
           created_at?: string;
           eligible_operations?: string[];
           estimated_wait_minutes?: number | null;
@@ -477,6 +483,18 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      is_platform_administrator: {
+        Args: Record<PropertyKey, never>;
+        Returns: boolean;
+      };
+      administration_overview: {
+        Args: Record<PropertyKey, never>;
+        Returns: Json;
+      };
+      administration_command: {
+        Args: { p_command: string; p_input: Json; p_key: string };
+        Returns: Json;
+      };
       apply_trip_command: {
         Args: {
           p_command: string;

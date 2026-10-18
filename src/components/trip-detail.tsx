@@ -9,6 +9,7 @@ import type { Tables, Json } from "@/types/database";
 import type { EntryReport, Delivery } from "@/lib/trip-data";
 import { ActionForm } from "./action-form";
 import { Badge } from "./workspace";
+import { QrScanner } from "./qr-scanner";
 
 type Trip = Tables<"trips">;
 function obj(value: Json | undefined): Record<string, Json | undefined> {
@@ -357,10 +358,7 @@ export function TripControls({
                 command="verify"
                 label="verify"
               >
-                <label>
-                  {t(locale, "qr")}
-                  <input name="qr" required defaultValue={trip.id} dir="ltr" />
-                </label>
+                <QrScanner locale={locale} initialValue={trip.id} />
                 <label>
                   {t(locale, "plate")}
                   <input

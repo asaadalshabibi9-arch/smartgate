@@ -9,6 +9,8 @@ import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/types/database";
+import QRCode from "qrcode";
+import { locales, t, direction } from "../../src/lib/i18n";
 
 type Account = {
   account_key: string;
@@ -22,6 +24,247 @@ const accounts: Account[] = JSON.parse(
     readFileSync(".local/demo-accounts.json", "utf8"),
 );
 const account = (key: string) => accounts.find((a) => a.account_key === key)!;
+test("eight languages preserve routes and render native scripts without page overflow", async ({
+  page,
+}) => {
+  await login(page, "company");
+  for (const locale of locales) {
+    await page.goto(`/${locale}/gates?review=1`);
+    await expect(page.locator("html")).toHaveAttribute("lang", locale);
+    await expect(page.locator("html")).toHaveAttribute(
+      "dir",
+      direction(locale),
+    );
+    await expect(
+      page.getByRole("heading", {
+        name: t(locale, "gates"),
+        exact: true,
+        level: 1,
+      }),
+    ).toBeVisible();
+    const picker = page.getByRole("combobox", {
+      name: t(locale, "language"),
+      exact: true,
+    });
+    await expect(picker).toHaveValue(locale);
+    expect(await picker.locator("option").count()).toBe(8);
+    await page.evaluate(() => document.fonts.ready);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+  }
+  await page
+    .getByRole("combobox", { name: t("ne", "language"), exact: true })
+    .selectOption("ur");
+  await expect(page).toHaveURL(/\/ur\/gates\?review=1$/);
+  await expect(
+    page.getByRole("heading", {
+      name: t("ur", "gates"),
+      exact: true,
+      level: 1,
+    }),
+  ).toBeVisible();
+});
+
+test("automatic fallback refreshes another actor's change and administration remains closed", async ({
+  page,
+}) => {
+  await login(page, "company");
+  await page.goto("/en/administration");
+  await expect(
+    page.getByRole("heading", { name: "Page unavailable", exact: true }),
+  ).toBeVisible();
+  await page.goto("/en/gates");
+  const sim = await client("simulation");
+  const original = await sim
+    .from("gates")
+    .select("*")
+    .eq("code", "GATE-C")
+    .single();
+  expect(original.error).toBeNull();
+  const gate = original.data!;
+  const card = page
+    .getByRole("article")
+    .filter({
+      has: page.getByRole("heading", { name: "GATE-C", exact: true }),
+    });
+  try {
+    expect(
+      (
+        await sim.rpc("update_demo_gate", {
+          p_gate: gate.id,
+          p_input: {
+            status: gate.status,
+            queue_length: 71,
+            service_rate_per_hour: 15,
+          },
+        })
+      ).error,
+    ).toBeNull();
+    await expect(card.getByText("71", { exact: true })).toBeVisible({
+      timeout: 35_000,
+    });
+    await page.context().setOffline(true);
+    await expect(
+      page.getByText("Offline; displayed data may be stale", { exact: true }),
+    ).toBeVisible();
+  } finally {
+    await page.context().setOffline(false);
+    expect(
+      (
+        await sim.rpc("update_demo_gate", {
+          p_gate: gate.id,
+          p_input: {
+            status: gate.status,
+            queue_length: gate.queue_length ?? "",
+            service_rate_per_hour: gate.service_rate_per_hour ?? "",
+          },
+        })
+      ).error,
+    ).toBeNull();
+    await sim.auth.signOut({ scope: "local" });
+  }
+});
+
+test("location requires a user action and never invents configured gate positions", async ({
+  page,
+  context,
+}) => {
+  await login(page, "company");
+  await page.goto("/en/gates");
+  await expect(
+    page.getByText("Gate coordinates are not configured.", { exact: false }),
+  ).toBeVisible();
+  await expect(page.getByTitle("Map", { exact: true })).toHaveCount(0);
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({
+    latitude: 23.6,
+    longitude: 58.4,
+    accuracy: 50,
+  });
+  await page
+    .getByRole("button", { name: "Show my location", exact: true })
+    .click();
+  await expect(
+    page.getByText(/Approximate location accuracy \(m\): 50/),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Open external map" }),
+  ).toHaveAttribute("href", /mlat=23.6&mlon=58.4/);
+  await expect(page.getByTitle("Map", { exact: true })).toHaveCount(0);
+  await page.route("https://www.openstreetmap.org/**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: "<p>Map provider fixture</p>",
+    }),
+  );
+  await page.getByRole("button", { name: "Map", exact: true }).click();
+  await expect(page.getByTitle("Map", { exact: true })).toHaveAttribute(
+    "src",
+    /marker=23.6,58.4/,
+  );
+});
+
+test("camera QR decoding fills a reference, stops capture and never submits verification", async ({
+  page,
+}) => {
+  await login(page, "simulation");
+  const db = await client("simulation");
+  const trip = await db
+    .from("trips")
+    .select("id,status")
+    .like("cargo_type", "[SC03] %")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+  expect(trip.error).toBeNull();
+  const reference = randomUUID();
+  const image = await QRCode.toDataURL(reference, { width: 480, margin: 4 });
+  await page.addInitScript(
+    ({ image }) => {
+      Object.defineProperty(navigator.mediaDevices, "getUserMedia", {
+        configurable: true,
+        value: async () => {
+          const picture = new Image();
+          picture.src = image;
+          await picture.decode();
+          const canvas = document.createElement("canvas");
+          canvas.width = 640;
+          canvas.height = 640;
+          const ctx = canvas.getContext("2d")!;
+          ctx.fillStyle = "white";
+          ctx.fillRect(0, 0, 640, 640);
+          ctx.drawImage(picture, 80, 80);
+          const media = canvas.captureStream(10);
+          const draw = window.setInterval(
+            () => ctx.drawImage(picture, 80, 80),
+            100,
+          );
+          media
+            .getTracks()[0]
+            .addEventListener("ended", () => clearInterval(draw));
+          Object.assign(window, { smartgateTestStream: media });
+          return media;
+        },
+      });
+    },
+    { image },
+  );
+  try {
+    await page.goto(`/en/trips/${trip.data!.id}`);
+    await page
+      .getByRole("button", { name: "Scan QR with camera", exact: true })
+      .click();
+    await expect(
+      page.getByLabel("Read QR reference", { exact: true }),
+    ).toHaveValue(reference);
+    await expect(
+      page.getByText("Reference scanned. Review it before verification.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          (
+            window as unknown as { smartgateTestStream: MediaStream }
+          ).smartgateTestStream
+            .getTracks()
+            .every((track) => track.readyState === "ended"),
+        ),
+      )
+      .toBe(true);
+    expect(
+      (await db.from("trips").select("status").eq("id", trip.data!.id).single())
+        .data?.status,
+    ).toBe(trip.data!.status);
+    await page.evaluate(() =>
+      Object.defineProperty(navigator.mediaDevices, "getUserMedia", {
+        configurable: true,
+        value: async () => {
+          throw new DOMException("Denied", "NotAllowedError");
+        },
+      }),
+    );
+    await page
+      .getByRole("button", { name: "Scan QR with camera", exact: true })
+      .click();
+    await expect(
+      page.getByText(
+        "Camera unavailable. Check permission or enter the reference manually.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByLabel("Read QR reference", { exact: true }),
+    ).toBeEditable();
+  } finally {
+    await db.auth.signOut({ scope: "local" });
+  }
+});
 // Short-lived Vercel authentication is sent only to the exact preview origin.
 async function protectPreview(context: BrowserContext) {
   if (process.env.E2E_PUBLIC === "1") return;

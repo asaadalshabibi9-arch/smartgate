@@ -7,8 +7,10 @@ import { rolePath } from "@/lib/auth";
 import { t, type Locale } from "@/lib/i18n";
 import type { Tables } from "@/types/database";
 import { LanguageSwitch } from "./language-switch";
+import { LiveUpdates } from "./live-updates";
+import { administratorAllowed } from "@/lib/administration";
 
-export function Shell({
+export async function Shell({
   locale,
   profile,
   children,
@@ -28,6 +30,8 @@ export function Shell({
     { href: `${base}/scenarios`, key: "scenarios" },
     { href: `${base}/help`, key: "help" },
   ];
+  if (await administratorAllowed(locale))
+    items.push({ href: `${base}/administration`, key: "administration" });
   return (
     <div className="workspace">
       <a className="skip-link" href="#main-content">
@@ -96,6 +100,7 @@ export function Shell({
           {children}
         </main>
         <footer className="footer">
+          <LiveUpdates locale={locale} profileId={profile.id} />
           <span>SmartGate · {t(locale, "demoShort")}</span>
           <span>{t(locale, "timezone")}</span>
         </footer>

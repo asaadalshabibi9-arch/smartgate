@@ -1,3 +1,4 @@
+import { t, type Locale } from "./i18n.ts";
 // FR14: synthetic scenarios are examples, never a source of authorization.
 export const scenarios = [
   {
@@ -151,9 +152,18 @@ export function scenarioByCode(code: string | undefined) {
 export function scenarioForCargo(cargo: string | null) {
   return scenarios.find((s) => cargo?.startsWith(`[${s.code}] `));
 }
-export function scenarioText(
-  value: readonly [string, string],
-  locale: "ar" | "en",
-) {
+export function scenarioText(value: readonly [string, string], locale: Locale) {
+  if (locale !== "ar" && locale !== "en") {
+    const scenario = scenarios.find(
+      (item) => item.title === value || item.description === value,
+    );
+    if (scenario)
+      return t(
+        locale,
+        scenario.title === value
+          ? `scenarioTitle_${scenario.code}`
+          : `scenarioStep_${scenario.steps[0]}`,
+      );
+  }
   return value[locale === "ar" ? 0 : 1];
 }

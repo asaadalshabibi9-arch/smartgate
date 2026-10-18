@@ -1,12 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseConfig } from "@/lib/supabase/config";
+import { localeOf } from "@/lib/i18n";
 
 export async function proxy(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set(
     "x-smartgate-locale",
-    request.nextUrl.pathname.split("/")[1] === "en" ? "en" : "ar",
+    localeOf(request.nextUrl.pathname.split("/")[1]),
   );
   let response = NextResponse.next({ request: { headers: requestHeaders } });
   try {
@@ -33,4 +34,4 @@ export async function proxy(request: NextRequest) {
   response.headers.set("Cache-Control", "private, no-store");
   return response;
 }
-export const config = { matcher: ["/ar/:path*", "/en/:path*"] };
+export const config = { matcher: ["/(ar|en|hi|ur|bn|ml|ta|ne)/:path*"] };

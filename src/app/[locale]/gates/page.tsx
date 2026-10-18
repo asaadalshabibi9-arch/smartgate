@@ -3,6 +3,7 @@ import { localeOf, t, dateTime } from "@/lib/i18n";
 import { Shell, PageHeading } from "@/components/workspace";
 import { Refresh } from "@/components/refresh";
 import { GateCards } from "@/components/gates";
+import { LocationMap } from "@/components/location-map";
 export default async function Gates({
   params,
 }: {
@@ -35,6 +36,7 @@ export default async function Gates({
         gates={data}
         editable={profile.role === "demo_admin"}
       />
+      <LocationMap locale={locale} gates={data} />
       {audit?.data.length ? (
         <section className="panel">
           <h2>{t(locale, "gateAudit")}</h2>
