@@ -1,0 +1,124 @@
+{
+  "fileKey": "5aco8x56a3uNWmrSlwNSBz",
+  "url": "https://www.figma.com/design/5aco8x56a3uNWmrSlwNSBz",
+  "date": "2026-10-17",
+  "status": "Design proposal; editable static screens, not a functional prototype",
+  "pages": [
+    {
+      "id": "0:1",
+      "name": "01 · الشاشات الرئيسية"
+    },
+    {
+      "id": "2:43",
+      "name": "02 · البوابات والاستثناءات"
+    },
+    {
+      "id": "2:44",
+      "name": "03 · السائق وحالات الواجهة"
+    }
+  ],
+  "sidebarId": "2:15",
+  "briefId": "8:252",
+  "screens": [
+    {
+      "id": "4:179",
+      "name": "01 / Company / FR01 FR11",
+      "width": 1440,
+      "height": 1024,
+      "descendants": 95
+    },
+    {
+      "id": "4:281",
+      "name": "02 / Create trip / FR01",
+      "width": 1440,
+      "height": 1024,
+      "descendants": 91
+    },
+    {
+      "id": "4:401",
+      "name": "03 / Trip detail / FR02 FR04 FR06 FR09",
+      "width": 1440,
+      "height": 1195,
+      "descendants": 99
+    },
+    {
+      "id": "5:145",
+      "name": "04 / Entry report / FR10 FR12 FR13",
+      "width": 1440,
+      "height": 1239,
+      "descendants": 99
+    },
+    {
+      "id": "5:245",
+      "name": "05 / Notifications / FR12",
+      "width": 1440,
+      "height": 1024,
+      "descendants": 58
+    },
+    {
+      "id": "5:322",
+      "name": "06 / Demo account / FR15",
+      "width": 1440,
+      "height": 1024,
+      "descendants": 58
+    },
+    {
+      "id": "6:252",
+      "name": "07 / Gates / FR03 FR04 FR05",
+      "width": 1440,
+      "height": 1047,
+      "descendants": 83
+    },
+    {
+      "id": "6:342",
+      "name": "08 / Gate operation / FR07 FR08 FR09",
+      "width": 1440,
+      "height": 1072,
+      "descendants": 82
+    },
+    {
+      "id": "6:429",
+      "name": "09 / Barrier failure / FR08 FR11 AT03",
+      "width": 1440,
+      "height": 1024,
+      "descendants": 64
+    },
+    {
+      "id": "6:500",
+      "name": "10 / Simulation / FR14",
+      "width": 1440,
+      "height": 1059,
+      "descendants": 79
+    },
+    {
+      "id": "7:252",
+      "name": "11 / Driver trip / Arabic / FR02 FR04",
+      "width": 390,
+      "height": 1095
+    },
+    {
+      "id": "7:287",
+      "name": "12 / Driver recommendation / FR05 FR06",
+      "width": 390,
+      "height": 849
+    },
+    {
+      "id": "7:320",
+      "name": "13 / Driver waiting / 360 / AT02",
+      "width": 360,
+      "height": 765
+    },
+    {
+      "id": "7:348",
+      "name": "14 / Driver trip / English LTR proposal",
+      "width": 390,
+      "height": 862
+    },
+    {
+      "id": "7:373",
+      "name": "15 / UI states / FR01 AT10 AT12",
+      "width": 1120,
+      "height": 871
+    }
+  ]
+}

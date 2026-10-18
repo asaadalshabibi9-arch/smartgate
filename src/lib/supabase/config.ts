@@ -1,6 +1,4 @@
-function requireEnvironmentVariable(name: string) {
-  const value = process.env[name];
-
+function requireEnvironmentVariable(name: string, value: string | undefined) {
   if (!value) {
     throw new Error(`Missing required environment variable: ${name}`);
   }
@@ -10,9 +8,13 @@ function requireEnvironmentVariable(name: string) {
 
 export function getSupabaseConfig() {
   return {
-    url: requireEnvironmentVariable("NEXT_PUBLIC_SUPABASE_URL"),
+    url: requireEnvironmentVariable(
+      "NEXT_PUBLIC_SUPABASE_URL",
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+    ),
     publishableKey: requireEnvironmentVariable(
       "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     ),
   };
 }

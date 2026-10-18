@@ -2,8 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
+  // Authenticated demo pages always read fresh, per-request data (FR15).
+  cacheComponents: false,
   turbopack: {
     rules: {
       "*.css": {

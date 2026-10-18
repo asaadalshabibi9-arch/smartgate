@@ -1,0 +1,16 @@
+.local
+.env*
+!.env.example
+.git
+test-results
+playwright-report
+tests
+scripts
+docs
+.agents
+*.tsbuildinfo
+/supabase/
+.github
+AGENTS.md
+Implementation-plan.md
+skills-lock.json

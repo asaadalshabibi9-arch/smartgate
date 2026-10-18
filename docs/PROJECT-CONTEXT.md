@@ -95,9 +95,11 @@
 |---|---|
 | GitHub | المستودع `asaadalshabibi9-arch/smartgate` ومصدر النشر الآلي |
 | Supabase | قاعدة البيانات والمصادقة؛ التغييرات تحفظ كترحيلات قابلة للتتبع |
-| Vercel | نشر تلقائي من فرع `main`؛ رابط الإنتاج `https://smartgate-gold.vercel.app` |
-| Figma | متصل بـCodex عبر MCP؛ رابط ملف التصميم يضاف عند إنشاء ملف SmartGate |
+| Vercel | الإنتاج الحالي `https://smartgate-gold.vercel.app`، بالنشر `dpl_6hY9tJaxdMup3J6gkuArnrCLzNKe`؛ صفحات الدخول عامة وتحتاج حساب SmartGate فقط. النشر من ملفات العمل المحلية، ولم يُدفع الكود إلى `main`. |
+| Figma | [ملف تصاميم SmartGate](https://www.figma.com/design/5aco8x56a3uNWmrSlwNSBz)؛ مرجع بناء معتمد بالقرار A11، وتفاصيله في [مراجعة التصميم](design/Figma-design-review.md) |
 
 لا تحفظ مفاتيح الخدمات أو كلمات المرور في Git. تبقى القيم الخاصة في متغيرات
 البيئة المحلية أو إعدادات منصة الاستضافة.
+
+دليل تشغيل النموذج في [DEMO-GUIDE.md](DEMO-GUIDE.md)، ونتائج التحقق وحدود المراجعة في [TEST-REPORT.md](TEST-REPORT.md).
 
