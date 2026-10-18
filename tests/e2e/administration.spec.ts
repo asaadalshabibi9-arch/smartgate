@@ -150,3 +150,15 @@ test("real Postgres change reaches the browser and refreshes without fallback po
     await sim.auth.signOut({scope:"local"});
   }
 });
+
+test("public signup stays closed even when managed-account metadata is forged", async () => {
+  const db = createClient<Database>(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,{auth:{persistSession:false,autoRefreshToken:false}});
+  const id=randomUUID();
+  const response=await db.auth.signUp({
+    email:`blocked-${id}@smartgate.test`,password:randomBytes(24).toString("base64url"),
+    options:{data:{smartgate_managed:true,provisioning_key:id,role:"demo_admin"}},
+  });
+  expect(response.error).not.toBeNull();
+  expect(response.data.user).toBeNull();
+  expect(response.data.session).toBeNull();
+});
