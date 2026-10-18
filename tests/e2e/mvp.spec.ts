@@ -85,11 +85,9 @@ test("automatic fallback refreshes another actor's change and administration rem
     .single();
   expect(original.error).toBeNull();
   const gate = original.data!;
-  const card = page
-    .getByRole("article")
-    .filter({
-      has: page.getByRole("heading", { name: "GATE-C", exact: true }),
-    });
+  const card = page.getByRole("article").filter({
+    has: page.getByRole("heading", { name: "GATE-C", exact: true }),
+  });
   try {
     expect(
       (
@@ -181,7 +179,9 @@ test("camera QR decoding fills a reference, stops capture and never submits veri
     .limit(1)
     .single();
   expect(trip.error).toBeNull();
-  const reference = randomUUID();
+  // Regression: the previous decoder could not read this valid QR mask pattern.
+  const reference =
+    process.env.E2E_QR_REFERENCE ?? "bc01c00f-e753-419e-8c27-676b5931c0ff";
   const image = await QRCode.toDataURL(reference, { width: 480, margin: 4 });
   await page.addInitScript(
     ({ image }) => {

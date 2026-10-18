@@ -358,7 +358,7 @@ export function TripControls({
                 command="verify"
                 label="verify"
               >
-                <QrScanner locale={locale} initialValue={trip.id} />
+                <QrScanner key={trip.id} locale={locale} initialValue={trip.id} />
                 <label>
                   {t(locale, "plate")}
                   <input

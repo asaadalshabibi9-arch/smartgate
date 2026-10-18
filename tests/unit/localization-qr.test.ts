@@ -11,6 +11,8 @@ import {
 import { translatedRows } from "../../src/lib/translations";
 import { journeyReference } from "../../src/lib/domain/qr";
 import { scenarios, scenarioText } from "../../src/lib/scenarios";
+import QRCode from "qrcode";
+import decode from "jsqr";
 
 describe("A17 eight complete UI dictionaries", () => {
   it("has an authored translation for every base key in all six added locales", () => {
@@ -44,6 +46,27 @@ describe("A17 eight complete UI dictionaries", () => {
   });
 });
 describe("A16 untrusted camera QR", () => {
+  it("decodes a genuine generated journey QR in each of the eight mask patterns", () => {
+    const reference = "bc01c00f-e753-419e-8c27-676b5931c0ff";
+    for (const maskPattern of [0, 1, 2, 3, 4, 5, 6, 7] as const) {
+      const { modules } = QRCode.create(reference, { maskPattern });
+      const width = (modules.size + 8) * 8;
+      const pixels = new Uint8ClampedArray(width * width * 4).fill(255);
+      for (let y = 0; y < modules.size; y++)
+        for (let x = 0; x < modules.size; x++) {
+          if (!modules.data[y * modules.size + x]) continue;
+          for (let dy = 0; dy < 8; dy++)
+            for (let dx = 0; dx < 8; dx++) {
+              const offset =
+                (((y + 4) * 8 + dy) * width + (x + 4) * 8 + dx) * 4;
+              pixels[offset] = pixels[offset + 1] = pixels[offset + 2] = 0;
+            }
+        }
+      expect(decode(pixels, width, width)?.data, `mask ${maskPattern}`).toBe(
+        reference,
+      );
+    }
+  });
   it("only accepts a bare journey UUID and never follows embedded URLs", () => {
     const reference = "e7d13168-f894-46c5-bb03-a076f60337cf";
     expect(journeyReference(` ${reference.toUpperCase()} `)).toBe(reference);

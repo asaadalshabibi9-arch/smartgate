@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import type { IScannerControls } from "@zxing/browser";
 import { t, type Locale } from "@/lib/i18n";
 import { journeyReference } from "@/lib/domain/qr";
 
@@ -15,14 +14,14 @@ export function QrScanner({
   const [active, setActive] = useState(false);
   const [message, setMessage] = useState("");
   const video = useRef<HTMLVideoElement>(null);
-  const controls = useRef<IScannerControls | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stream = useRef<MediaStream | null>(null);
   const generation = useRef(0);
 
   const release = () => {
     generation.current++;
-    controls.current?.stop();
-    controls.current = null;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
     stream.current?.getTracks().forEach((track) => track.stop());
     stream.current = null;
     if (video.current) video.current.srcObject = null;
@@ -47,10 +46,14 @@ export function QrScanner({
     setActive(true);
     setMessage("");
     try {
-      const { BrowserQRCodeReader } = await import("@zxing/browser");
+      const { default: decode } = await import("jsqr");
       if (token !== generation.current) return;
       const media = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
         audio: false,
       });
       if (token !== generation.current) {
@@ -62,24 +65,58 @@ export function QrScanner({
         release();
         return;
       }
-      const scanner = await new BrowserQRCodeReader().decodeFromStream(
-        media,
-        video.current,
-        (result) => {
-          if (!result || token !== generation.current) return;
-          const reference = journeyReference(result.getText());
-          if (!reference) {
-            setMessage("invalidQr");
-            return;
+      video.current.srcObject = media;
+      await video.current.play();
+      if (token !== generation.current) return;
+      video.current?.scrollIntoView({ block: "nearest" });
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) throw new Error("Canvas unavailable");
+      const scan = () => {
+        if (token !== generation.current || !video.current) return;
+        try {
+          const preview = video.current;
+          if (
+            preview.readyState >= 2 &&
+            preview.videoWidth &&
+            preview.videoHeight
+          ) {
+            const scale = Math.min(
+              1,
+              960 / Math.max(preview.videoWidth, preview.videoHeight),
+            );
+            canvas.width = Math.round(preview.videoWidth * scale);
+            canvas.height = Math.round(preview.videoHeight * scale);
+            context.drawImage(preview, 0, 0, canvas.width, canvas.height);
+            const pixels = context.getImageData(
+              0,
+              0,
+              canvas.width,
+              canvas.height,
+            );
+            const result = decode(pixels.data, canvas.width, canvas.height, {
+              inversionAttempts: "attemptBoth",
+            });
+            if (result) {
+              const reference = journeyReference(result.data);
+              if (reference) {
+                setValue(reference);
+                setMessage("scanReady");
+                release();
+                setActive(false);
+                return;
+              }
+              setMessage("invalidQr");
+            }
           }
-          setValue(reference);
-          setMessage("scanReady");
+          timer.current = setTimeout(scan, 250);
+        } catch {
           release();
           setActive(false);
-        },
-      );
-      if (token !== generation.current) scanner.stop();
-      else controls.current = scanner;
+          setMessage("cameraError");
+        }
+      };
+      scan();
     } catch {
       if (token !== generation.current) return;
       release();
