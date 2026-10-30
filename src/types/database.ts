@@ -85,6 +85,7 @@ export type Database = {
       };
       gates: {
         Row: {
+          display_order: number;
           latitude: number | null;
           longitude: number | null;
           code: string;
@@ -101,6 +102,7 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          display_order?: number;
           code: string;
           latitude?: number | null;
           longitude?: number | null;
@@ -117,6 +119,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          display_order?: number;
           code?: string;
           latitude?: number | null;
           longitude?: number | null;

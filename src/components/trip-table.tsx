@@ -91,7 +91,7 @@ export function TripTable({
             }}
           >
             <option value="">{t(locale, "allOperations")}</option>
-            {["container", "general_cargo"].map((s) => (
+            {["container", "general_cargo", "refrigerated"].map((s) => (
               <option key={s} value={s}>
                 {t(locale, s)}
               </option>

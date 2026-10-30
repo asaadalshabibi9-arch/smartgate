@@ -11,7 +11,7 @@ export default async function Gates({
 }) {
   const locale = localeOf((await params).locale);
   const { db, profile } = await requireIdentity(locale);
-  const { data, error } = await db.from("gates").select("*").order("code");
+  const { data, error } = await db.from("gates").select("*").order("display_order").order("code");
   if (error) throw new Error("Gate query failed");
   const audit =
     profile.role === "demo_admin"

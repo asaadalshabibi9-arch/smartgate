@@ -29,8 +29,9 @@ async function save(page: Page, command: string, label: string) {
   await expect(target.getByText("Action saved.", {exact:true})).toBeVisible({timeout:25_000});
 }
 
-test("explicit administrator provisions isolated accounts, trucks, assignments and reference coordinates", async ({page}) => {
+test("explicit administrator provisions isolated accounts, trucks, assignments and reference coordinates", async ({page,baseURL}) => {
   test.skip(!ready, "Dedicated administrator must be provisioned privately before cloud verification");
+  test.skip(Boolean(baseURL?.startsWith("http://127.0.0.1") || baseURL?.startsWith("http://localhost")) && !process.env.SUPABASE_SECRET_KEY, "Local provisioning is intentionally disabled without its server secret; verify this case on the hosted production build.");
   test.setTimeout(180_000);
   const errors: string[] = [];
   page.on("pageerror", e => errors.push(e.message));

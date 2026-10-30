@@ -133,7 +133,7 @@ test("location requires a user action and never invents configured gate position
   await login(page, "company");
   await page.goto("/en/gates");
   await expect(
-    page.getByText("Gate coordinates are not configured.", { exact: false }),
+    page.getByText(t("en", "mapConfiguredHint"), { exact: true }),
   ).toBeVisible();
   await expect(page.getByTitle("Map", { exact: true })).toHaveCount(0);
   await context.grantPermissions(["geolocation"]);

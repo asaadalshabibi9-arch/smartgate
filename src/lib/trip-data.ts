@@ -37,7 +37,7 @@ export async function loadTrip(locale: Locale, id: string) {
       .eq("trip_id", id)
       .order("occurred_at")
       .order("id"),
-    db.from("gates").select("*").order("code"),
+    db.from("gates").select("*").order("display_order").order("code"),
     db.rpc("entry_report", { p_trip: id }),
   ]);
   if (events.error || gates.error || report.error || !report.data)

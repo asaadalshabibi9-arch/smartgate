@@ -10,6 +10,7 @@ import {
   TripControls,
   ReportLink,
 } from "@/components/trip-detail";
+import { DriverNavigation } from "@/components/driver-navigation";
 import { Refresh } from "@/components/refresh";
 export default async function TripPage({
   params,
@@ -42,6 +43,14 @@ export default async function TripPage({
           trip={trip}
           gates={gates}
           canAccept={profile.role === "driver" && trip.status === "in_transit"}
+        />
+      ) : null}
+      {profile.role === "driver" ? (
+        <DriverNavigation
+          locale={locale}
+          gates={gates}
+          gateId={trip.gate_id}
+          status={trip.status}
         />
       ) : null}
       <div className="split-panel">

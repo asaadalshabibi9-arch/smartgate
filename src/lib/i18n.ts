@@ -1,4 +1,5 @@
 import { translatedRows } from "./translations.ts";
+import { navigationCopy } from "./navigation-copy";
 export const locales = [
   "ar",
   "en",
@@ -30,6 +31,12 @@ export function localeOf(value: string): Locale {
   return isLocale(value) ? value : "ar";
 }
 export const copy = {
+  ...(Object.fromEntries(
+    Object.entries(navigationCopy).map(([key, values]) => [
+      key,
+      [values[0], values[1]],
+    ]),
+  ) as Record<string, readonly [string, string]>),
   latitude: ["خط العرض", "Latitude"],
   longitude: ["خط الطول", "Longitude"],
   gateCoordinates: ["إحداثيات البوابات المرجعية", "Gate reference coordinates"],

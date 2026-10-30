@@ -5,7 +5,7 @@ export const tripSchema = z
     driver_profile_id: z.uuid(),
     truck_id: z.uuid(),
     gate_id: z.uuid(),
-    operation_type: z.enum(["container", "general_cargo"]),
+    operation_type: z.enum(["container", "general_cargo", "refrigerated"]),
     cargo_type: z.string().trim().min(1).max(200),
     cargo_weight_kg: z
       .union([z.number(), z.string().trim().min(1)])
@@ -18,7 +18,9 @@ export const tripSchema = z
     travel_minutes: z.coerce.number().int().min(0).max(1440),
   })
   .refine(
-    (x) => x.operation_type !== "container" || x.container_number.length > 0,
+    (x) =>
+      !["container", "refrigerated"].includes(x.operation_type) ||
+      x.container_number.length > 0,
     { path: ["container_number"], message: "invalid_input" },
   )
   .refine(

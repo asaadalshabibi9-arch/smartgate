@@ -1,0 +1,122 @@
+{
+  "fileKey": "5aco8x56a3uNWmrSlwNSBz",
+  "fileUrl": "https://www.figma.com/design/5aco8x56a3uNWmrSlwNSBz",
+  "exportedAt": "2026-10-30",
+  "source": "Figma",
+  "kind": "static-design-reference",
+  "disclosureAr": "صور تصاميم ثابتة من Figma؛ ليست بثًا حيًا أو إثباتًا للحالة التشغيلية الحالية.",
+  "assets": [
+    {
+      "slug": "company",
+      "nodeId": "4:179",
+      "path": "/showcase/screens/company.webp",
+      "width": 1440,
+      "height": 1024,
+      "locale": "ar",
+      "isCurrentRuntimeScreenshot": false
+    },
+    {
+      "slug": "create-trip",
+      "nodeId": "4:281",
+      "path": "/showcase/screens/create-trip.webp",
+      "width": 1440,
+      "height": 1024,
+      "locale": "ar",
+      "isCurrentRuntimeScreenshot": false
+    },
+    {
+      "slug": "trip-details",
+      "nodeId": "4:401",
+      "path": "/showcase/screens/trip-details.webp",
+      "width": 1440,
+      "height": 1195,
+      "locale": "ar",
+      "isCurrentRuntimeScreenshot": false
+    },
+    {
+      "slug": "report",
+      "nodeId": "5:145",
+      "path": "/showcase/screens/report.webp",
+      "width": 1440,
+      "height": 1239,
+      "locale": "ar",
+      "isCurrentRuntimeScreenshot": false
+    },
+    {
+      "slug": "gates",
+      "nodeId": "6:252",
+      "path": "/showcase/screens/gates.webp",
+      "width": 1440,
+      "height": 1047,
+      "locale": "ar",
+      "isCurrentRuntimeScreenshot": false
+    },
+    {
+      "slug": "operations",
+      "nodeId": "6:342",
+      "path": "/showcase/screens/operations.webp",
+      "width": 1440,
+      "height": 1072,
+      "locale": "ar",
+      "isCurrentRuntimeScreenshot": false
+    },
+    {
+      "slug": "fault",
+      "nodeId": "6:429",
+      "path": "/showcase/screens/fault.webp",
+      "width": 1440,
+      "height": 1024,
+      "locale": "ar",
+      "isCurrentRuntimeScreenshot": false
+    },
+    {
+      "slug": "driver",
+      "nodeId": "7:252",
+      "path": "/showcase/screens/driver.webp",
+      "width": 390,
+      "height": 1095,
+      "locale": "ar",
+      "isCurrentRuntimeScreenshot": false
+    },
+    {
+      "slug": "recommendation",
+      "nodeId": "7:287",
+      "path": "/showcase/screens/recommendation.webp",
+      "width": 390,
+      "height": 849,
+      "locale": "ar",
+      "isCurrentRuntimeScreenshot": false
+    },
+    {
+      "slug": "awaiting-crossing",
+      "nodeId": "7:320",
+      "path": "/showcase/screens/awaiting-crossing.webp",
+      "width": 360,
+      "height": 765,
+      "locale": "ar",
+      "isCurrentRuntimeScreenshot": false
+    }
+  ],
+  "runtimeAssets": [
+    {
+      "slug": "gates-live",
+      "path": "/showcase/screens/gates-live.webp",
+      "source": "local-production-build",
+      "width": 1280,
+      "height": 1579,
+      "date": "2026-10-30",
+      "data": "synthetic demo",
+      "isCurrentRuntimeScreenshot": true
+    },
+    {
+      "slug": "navigation-live",
+      "path": "/showcase/screens/navigation-live.webp",
+      "source": "local-production-build",
+      "width": 968,
+      "height": 751,
+      "date": "2026-10-30",
+      "data": "mock GPS coordinates and synthetic demo journey",
+      "isCurrentRuntimeScreenshot": true
+    }
+  ]
+}

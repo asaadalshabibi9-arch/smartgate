@@ -27,7 +27,7 @@ export default async function Dashboard({
     redirect(`/${locale}/${rolePath[profile.role]}`);
   const [tripsResult, gatesResult] = await Promise.all([
     db.from("trips").select("*").order("created_at", { ascending: false }),
-    db.from("gates").select("*").order("code"),
+    db.from("gates").select("*").order("display_order").order("code"),
   ]);
   if (tripsResult.error || gatesResult.error)
     throw new Error("Workspace query failed");

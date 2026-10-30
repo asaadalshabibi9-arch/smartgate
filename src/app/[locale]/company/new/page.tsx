@@ -26,7 +26,7 @@ export default async function NewTrip({
       .eq("role", "driver")
       .eq("company_id", profile.company_id!),
     db.from("trucks").select("*").eq("company_id", profile.company_id!),
-    db.from("gates").select("*").in("status", ["open", "busy"]).order("code"),
+    db.from("gates").select("*").in("status", ["open", "busy"]).order("display_order").order("code"),
   ]);
   if (drivers.error || trucks.error || gates.error)
     throw new Error("Trip resources unavailable");

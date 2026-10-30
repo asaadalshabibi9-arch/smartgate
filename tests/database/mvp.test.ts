@@ -141,6 +141,28 @@ afterAll(async () => {
   await db.close();
 });
 
+test("A18 refrigerated cargo enforces gate eligibility and independent container verification", async () => {
+  const gate = randomUUID();
+  await db.query("insert into public.gates(id,code,name,eligible_operations,queue_length,service_rate_per_hour) values($1,'COLD-TEST','Cold test',array['refrigerated'],3,12)",[gate]);
+  await db.query("insert into public.operator_gates(profile_id,gate_id) values($1,$2)",[ids.operator,gate]);
+  await expect(create({operation_type:"refrigerated",gate_id:ids.a})).rejects.toThrow("ineligible_gate");
+  await expect(create({operation_type:"refrigerated",gate_id:gate,container_number:""})).rejects.toThrow("invalid_input");
+  const cold = await create({operation_type:"refrigerated",gate_id:gate});
+  await command("driver","start",{},randomUUID(),cold);
+  await command("driver","arrive",{},randomUUID(),cold);
+  await command("sim","verify",{qr:cold,plate:"4821",container:"WRONG"},randomUUID(),cold);
+  expect((await rows("select status from public.trips where id=$1",[cold]))[0].status).toBe("verification_failed");
+  await expect(command("operator","request_open",{},randomUUID(),cold)).rejects.toThrow();
+  await command("sim","verify",{qr:cold,plate:"4821",container:"TEST-1"},randomUUID(),cold);
+  const checks = (await rows("select payload->'checks' checks from public.trip_events where trip_id=$1 and event_type='verification_passed'",[cold]))[0].checks as Record<string,unknown>;
+  expect(checks.container).toBe(true);
+  await command("operator","request_open",{},randomUUID(),cold);
+  await command("sim","barrier_opened",{},randomUUID(),cold);
+  expect((await rows("select completed_at from public.trips where id=$1",[cold]))[0].completed_at).toBeNull();
+  await command("sim","crossing_confirmed",{},randomUUID(),cold);
+  expect((await rows("select status from public.trips where id=$1",[cold]))[0].status).toBe("completed");
+});
+
 test("FR01 saves a valid trip and rejects invalid input and foreign membership", async () => {
   trip = await create();
   expect(

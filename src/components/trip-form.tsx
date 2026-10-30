@@ -40,7 +40,11 @@ export function TripForm({
   });
   const change = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = event.currentTarget;
-    setValues((previous) => ({ ...previous, [name]: value }));
+    setValues((previous) => ({
+      ...previous,
+      [name]: value,
+      ...(name === "operation_type" ? { gate_id: "" } : {}),
+    }));
   };
   const field = (name: string, label: string, type = "text") => {
     const invalid = state.fields?.includes(name);
@@ -123,7 +127,7 @@ export function TripForm({
           {select(
             "operation_type",
             "operation",
-            ["container", "general_cargo"].map((id) => ({
+            ["container", "general_cargo", "refrigerated"].map((id) => ({
               id,
               label: t(locale, id),
             })),
@@ -132,10 +136,14 @@ export function TripForm({
           {select(
             "gate_id",
             "gate",
-            gates.map((g) => ({
-              id: g.id,
-              label: `${g.code} — ${g.eligible_operations.map((o) => t(locale, o)).join(" / ")}`,
-            })),
+            gates
+              .filter((g) =>
+                g.eligible_operations.includes(values.operation_type),
+              )
+              .map((g) => ({
+                id: g.id,
+                label: `${g.code} — ${g.eligible_operations.map((o) => t(locale, o)).join(" / ")}`,
+              })),
           )}
           {field("container_number", "containerNumber")}
           {field("cargo_type", "cargoType")}

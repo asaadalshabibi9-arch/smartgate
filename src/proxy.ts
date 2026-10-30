@@ -10,6 +10,8 @@ export async function proxy(request: NextRequest) {
     localeOf(request.nextUrl.pathname.split("/")[1]),
   );
   let response = NextResponse.next({ request: { headers: requestHeaders } });
+  // A18: the public showcase has no account or database dependency.
+  if (/^\/ar\/showcase\/?$/.test(request.nextUrl.pathname)) return response;
   try {
     const { url, publishableKey } = getSupabaseConfig();
     const supabase = createServerClient(url, publishableKey, {

@@ -25,10 +25,19 @@ export function GateCards({
               </span>
               <div>
                 <h3>{gate.code}</h3>
-                <small>{t(locale, "simulated")}</small>
+                <small>
+                  {t(locale, "gate")}{" "}
+                  {gate.display_order < 999
+                    ? gate.display_order.toLocaleString(locale)
+                    : ""}{" "}
+                  ? {t(locale, "simulated")}
+                </small>
               </div>
               <Badge locale={locale} status={gate.status} />
             </div>
+            <p className="gate-specialty">
+              {gate.eligible_operations.map((o) => t(locale, o)).join(" / ")}
+            </p>
             <div className="gate-metrics">
               <div>
                 <span>

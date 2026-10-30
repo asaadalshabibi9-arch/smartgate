@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { Suspense } from "react";
 import { ArrowUpRight, Route, ScanLine, ShieldCheck } from "lucide-react";
 import { loginAction } from "@/app/actions";
@@ -100,6 +101,7 @@ export default async function Login({
               />
             </label>
           </ActionForm>
+          <Link className="button secondary login-showcase" href="/ar/showcase">{t(locale, "showcaseLink")} <ArrowUpRight size={18} aria-hidden /></Link>
           <p className="login-note">
             <ShieldCheck size={16} aria-hidden />
             {t(locale, "noSignup")}

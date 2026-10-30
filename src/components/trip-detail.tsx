@@ -367,7 +367,7 @@ export function TripControls({
                     defaultValue={report.plate_number}
                   />
                 </label>
-                {trip.operation_type === "container" ? (
+                {["container", "refrigerated"].includes(trip.operation_type) ? (
                   <label>
                     {t(locale, "containerNumber")}
                     <input
