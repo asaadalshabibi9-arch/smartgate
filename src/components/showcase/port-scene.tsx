@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { portTraffic } from "@/lib/domain/port-traffic";
 
 // A18: procedural, illustrative port. No real port, camera or barrier connection.
 export default function PortScene({
@@ -103,32 +104,60 @@ export default function PortScene({
           return mesh;
         }
         box(28, 0.9, 23, 0, -0.7, 0, colors.sand);
-        box(28, 0.2, 8, 0, -0.12, -8, 0x8fcad0);
-        box(28, 0.15, 15, 0, 0, 3.6, colors.light);
-        // Approach road, cross road and independent entry lanes.
-        box(28, 0.04, 3.2, 0, 0.1, 5, colors.road);
-        box(3.6, 0.05, 7, -8, 0.11, 9, colors.road);
-        for (let x = -13; x < 14; x += 1.6)
-          box(0.7, 0.015, 0.07, x, 0.14, 5, 0xffffff);
+        box(28, 0.2, 3.8, 0, -0.12, -9.6, 0x8fcad0);
+        box(28, 0.15, 19.2, 0, 0, 1.9, colors.light);
+        // A20: same footprint; a deep, clear apron separates entry from the yard.
+        box(27.6, 0.04, 3.6, 0, 0.1, 8.6, colors.road);
+        box(26, 0.03, 2.1, 0, 0.1, -3.15, 0xb3c4ca);
+        function arrow(x: number, z: number, rotation = 0) {
+          const shape = new T.Shape();
+          shape.moveTo(-0.55, 0);
+          shape.lineTo(0.02, 0.3);
+          shape.lineTo(0.02, 0.11);
+          shape.lineTo(0.6, 0.11);
+          shape.lineTo(0.6, -0.11);
+          shape.lineTo(0.02, -0.11);
+          shape.lineTo(0.02, -0.3);
+          shape.closePath();
+          const paint = new T.Mesh(
+            new T.ShapeGeometry(shape),
+            material(0xffffff),
+          );
+          paint.rotation.x = -Math.PI / 2;
+          const group = new T.Group();
+          group.position.set(x, 0.155, z);
+          group.rotation.y = rotation;
+          group.add(paint);
+          world.add(group);
+        }
+        for (const x of [-6, 1, 8]) arrow(x, 8.6);
+        for (let x = -13; x < 14; x += 1.5)
+          box(0.65, 0.015, 0.055, x, 0.14, 10.15, 0xffffff);
         const barriers: InstanceType<typeof T.Group>[] = [];
         for (let i = 0; i < 8; i++) {
           const x = -10.5 + i * 3;
-          box(2.3, 0.03, 7, x, 0.12, 1, colors.road);
-          box(0.12, 2.05, 0.2, x - 1.05, 1, 0, colors.navy);
-          box(0.12, 2.05, 0.2, x + 1.05, 1, 0, colors.navy);
+          const gateZ = 1.1;
+          box(1.9, 0.03, 10.6, x, 0.12, 2.2, colors.road);
+          for (const edge of [-0.83, 0.83]) {
+            box(0.045, 0.012, 3.7, x + edge, 0.145, 4.95, 0xffffff);
+            box(0.045, 0.012, 2.4, x + edge, 0.145, -1.2, 0xffffff);
+          }
+          arrow(x, 5.25, -Math.PI / 2);
+          box(0.12, 1.9, 0.2, x - 0.98, 1, gateZ, colors.navy);
+          box(0.12, 1.9, 0.2, x + 0.98, 1, gateZ, colors.navy);
           box(
-            2.5,
-            0.42,
-            1.15,
+            2.3,
+            0.32,
+            1.05,
             x,
-            2.1,
-            0,
+            2,
+            gateZ,
             i < 3 ? colors.petrol : i < 6 ? colors.navy : colors.teal,
           );
-          box(0.7, 1.1, 0.9, x + 0.92, 0.62, 1.15, 0xffffff);
-          box(0.5, 0.35, 0.02, x + 0.92, 0.9, 1.61, colors.navy);
+          box(0.57, 0.95, 0.8, x + 1.13, 0.57, gateZ + 1, 0xffffff);
+          box(0.4, 0.28, 0.02, x + 1.13, 0.78, gateZ + 1.41, colors.navy);
           const arm = new T.Group();
-          arm.position.set(x - 1, 1, 0.8);
+          arm.position.set(x - 0.98, 0.95, gateZ + 0.65);
           world.add(arm);
           box(1.9, 0.09, 0.12, 0.95, 0, 0, 0xf7fafb, arm);
           for (let n = 0; n < 4; n++)
@@ -138,9 +167,9 @@ export default function PortScene({
             0.15,
             0.4,
             0.15,
-            x - 1.1,
+            x - 0.98,
             1.45,
-            0.8,
+            gateZ + 0.15,
             i === 3 || i === 7 ? 0xcc6b64 : 0x57b995,
           );
           // Printed gate number on a canvas texture.
@@ -158,15 +187,15 @@ export default function PortScene({
               new T.PlaneGeometry(0.7, 0.35),
               new T.MeshBasicMaterial({ map: texture, transparent: true }),
             );
-            plate.position.set(x, 2.1, 0.59);
+            plate.position.set(x, 2, gateZ + 0.54);
             world.add(plate);
           }
         }
         // Container stacks, ribs, cranes and a small ship form the miniature's silhouette.
         for (let col = 0; col < 6; col++)
           for (let row = 0; row < 2; row++) {
-            const x = -10 + col * 3.7,
-              z = -3.3 - row * 1.65;
+            const x = -10.5 + col * 3.8,
+              z = -5 - row * 1.6;
             const height = col % 3 === 0 ? 2 : 1;
             for (let level = 0; level < height; level++) {
               const color = [
@@ -175,29 +204,33 @@ export default function PortScene({
                 colors.orange,
                 0xc6d9df,
               ][(col + row + level) % 4];
-              box(3.2, 1.05, 1.35, x, 0.7 + level * 1.08, z, color);
-              for (let rib = 0; rib < 10; rib++)
+              box(2.65, 0.85, 1.15, x, 0.56 + level * 0.88, z, color);
+              for (let rib = 0; rib < 9; rib++)
                 box(
                   0.045,
-                  0.9,
+                  0.73,
                   0.045,
-                  x - 1.42 + rib * 0.31,
-                  0.7 + level * 1.08,
-                  z + 0.69,
+                  x - 1.15 + rib * 0.29,
+                  0.56 + level * 0.88,
+                  z + 0.59,
                   color,
                 );
             }
           }
-        for (const x of [-8, 2, 10]) {
-          box(0.25, 6, 0.3, x, 3, -7, colors.navy);
-          box(5, 0.23, 0.25, x + 1.4, 6, -7, colors.navy);
-          box(0.19, 2, 0.19, x + 1.4, 7, -7, colors.petrol);
-          const cable = box(0.035, 3, 0.035, x + 3.4, 4.4, -7, colors.navy);
+        for (const x of [-10, -1, 8]) {
+          box(0.25, 5.5, 0.3, x, 2.75, -7.4, colors.navy);
+          box(4.8, 0.23, 0.25, x + 1.3, 5.5, -7.4, colors.navy);
+          box(0.19, 1.65, 0.19, x + 1.3, 6.3, -7.4, colors.petrol);
+          const cable = box(0.035, 2.6, 0.035, x + 3.3, 4.1, -7.4, colors.navy);
           cable.castShadow = false;
-          box(0.6, 0.15, 0.4, x + 3.4, 3, -7, colors.petrol);
+          box(0.6, 0.15, 0.4, x + 3.3, 2.8, -7.4, colors.petrol);
         }
+        // Small control building leaves the central forecourt unobstructed.
+        box(1.9, 1.3, 2.3, 11.6, 0.73, -5.5, 0xffffff);
+        box(2.1, 0.16, 2.5, 11.6, 1.46, -5.5, colors.navy);
+        box(1.5, 0.38, 0.025, 11.6, 1.05, -4.33, colors.petrol);
         const ship = new T.Group();
-        ship.position.set(-2, 0.05, -9.5);
+        ship.position.set(-2, 0.05, -9.7);
         world.add(ship);
         box(11, 0.8, 2.1, 0, 0.1, 0, colors.navy, ship);
         box(1.8, 1.5, 1.6, -4, 1, 0, 0xffffff, ship);
@@ -214,9 +247,15 @@ export default function PortScene({
           );
         function truck(color: number) {
           const group = new T.Group();
-          box(1.2, 0.7, 2.4, 0, 0.65, -0.4, color, group);
+          box(1.12, 0.8, 2.45, 0, 0.72, -0.5, color, group);
+          box(1.1, 0.16, 3.5, 0, 0.35, 0.05, colors.navy, group);
           box(1.15, 0.85, 1.05, 0, 0.65, 1.3, 0xffffff, group);
           box(1.02, 0.35, 0.03, 0, 0.84, 1.84, colors.navy, group);
+          for (const x of [-0.4, 0.4])
+            box(0.18, 0.12, 0.035, x, 0.48, 1.85, 0xf4dca6, group);
+          for (let rib = 0; rib < 7; rib++)
+            for (const x of [-0.57, 0.57])
+              box(0.025, 0.68, 0.04, x, 0.73, -1.5 + rib * 0.33, color, group);
           for (const x of [-0.62, 0.62])
             for (const z of [-1.1, 0.8, 1.4]) {
               const tire = new T.Mesh(
@@ -228,21 +267,33 @@ export default function PortScene({
               group.add(tire);
             }
           world.add(group);
-          return group;
+          group.scale.setScalar(0.62);
+          // Independent truck materials: fading a loop never fades port structures.
+          const own = new Map<
+            InstanceType<typeof T.Material>,
+            InstanceType<typeof T.Material>
+          >();
+          group.traverse((obj) => {
+            if (obj instanceof T.Mesh && !Array.isArray(obj.material)) {
+              const base = obj.material;
+              if (!own.has(base)) {
+                const copy = base.clone();
+                copy.transparent = true;
+                own.set(base, copy);
+              }
+              obj.material = own.get(base)!;
+            }
+          });
+          return { group, materials: [...own.values()] };
         }
-        const hero = truck(colors.petrol);
-        const queued = [
+        const fleet = [
+          truck(colors.petrol),
           truck(colors.orange),
           truck(colors.navy),
           truck(0x9fc4ce),
         ];
-        queued.forEach((g, i) => {
-          g.position.set(-8, 0, 8 + i * 3);
-          g.scale.setScalar(0.7);
-        });
-        hero.scale.setScalar(0.75);
         for (const x of [-13, 13])
-          for (const z of [-1, 3, 8]) {
+          for (const z of [-2.4, 3.5, 10.8]) {
             box(0.08, 3, 0.08, x, 1.5, z, colors.navy);
             box(0.7, 0.08, 0.25, x + 0.25, 3, z, 0xffffff);
           }
@@ -281,7 +332,10 @@ export default function PortScene({
         const target = new T.Vector3(),
           look = new T.Vector3(0, 0, 0);
         let phase = 0,
+          trafficTime = 1.2,
+          transition = 0,
           previous = 0;
+        let trafficMode = { alternate: false, crossing: false, blocked: false };
         function animate(time: number) {
           if (!alive) return;
           frame = requestAnimationFrame(animate);
@@ -289,7 +343,10 @@ export default function PortScene({
           const delta = Math.min((time - previous) / 1000, 0.05);
           previous = time;
           const s = state.current;
-          if (!s.paused && !reduced) phase += delta;
+          if (!s.paused && !reduced) {
+            phase += delta;
+            trafficTime += delta;
+          }
           const p = positions[s.chapter] ?? positions[0];
           target.set(
             p[0] + (reduced ? 0 : pointer.x),
@@ -298,29 +355,49 @@ export default function PortScene({
           );
           camera.position.lerp(target, reduced ? 1 : 0.035);
           camera.lookAt(look);
-          const chosen = s.alternate ? -7.5 : -10.5;
-          const u = reduced ? 0.45 : (phase % 14) / 14;
-          if (s.chapter < 2) {
-            hero.position.set(-8, 0, 8 - u * 4);
-            hero.rotation.y = Math.PI;
-          } else if (u < 0.45) {
-            hero.position.set(-8 + ((chosen + 8) * u) / 0.45, 0, 5);
-            hero.rotation.y = -Math.PI / 2;
-          } else {
-            hero.position.set(
-              chosen,
-              0,
-              5 -
-                ((u - 0.45) / 0.55) * (s.chapter >= 5 && !s.failure ? 8 : 3.4),
-            );
-            hero.rotation.y = Math.PI;
-          }
+          const desired = {
+            alternate: s.alternate,
+            crossing: s.chapter >= 5 && !s.failure,
+            blocked: s.chapter >= 5 && s.failure,
+          };
+          const changing = Object.keys(desired).some(
+            (key) =>
+              desired[key as keyof typeof desired] !==
+              trafficMode[key as keyof typeof trafficMode],
+          );
+          if (changing) {
+            transition =
+              reduced || s.paused ? 1 : Math.min(1, transition + delta / 0.35);
+            if (transition >= 1) {
+              trafficMode = desired;
+              trafficTime = reduced || s.paused ? 5 : 0;
+              transition = 0;
+            }
+          } else if (!changing) transition = 0;
+          const traffic = portTraffic(
+            reduced ? 5 : trafficTime,
+            trafficMode.alternate,
+            trafficMode.crossing,
+            trafficMode.blocked,
+          );
+          fleet.forEach(({ group, materials }, index) => {
+            const pose = traffic.trucks[index];
+            group.position.set(pose.x, 0.1, pose.z);
+            group.rotation.y = pose.heading;
+            const opacity = reduced ? 1 : traffic.opacity * (1 - transition);
+            group.visible = opacity > 0.01;
+            materials.forEach((m) => {
+              m.opacity = opacity;
+            });
+          });
           barriers.forEach((arm, i) => {
             const open =
-              s.chapter >= 5 && !s.failure && i === (s.alternate ? 1 : 0);
+              trafficMode.crossing &&
+              traffic.trucks[0].distance >= traffic.route.stopDistance - 2 &&
+              i === (trafficMode.alternate ? 1 : 0);
             arm.rotation.z = T.MathUtils.lerp(
               arm.rotation.z,
-              open ? -Math.PI / 2 : 0,
+              open ? Math.PI / 2 : 0,
               0.06,
             );
           });
