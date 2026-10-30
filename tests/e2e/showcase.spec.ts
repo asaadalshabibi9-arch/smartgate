@@ -207,7 +207,10 @@ test("A18 eight specialized gates and browser-local GPS reroute after an accepte
       path: `.local/gates-eight-${info.project.name}.png`,
       fullPage: true,
     });
-    if (info.project.name === "chromium")
+    if (
+      info.project.name === "chromium" &&
+      process.env.CAPTURE_SHOWCASE_ASSETS === "1"
+    )
       await page.screenshot({
         path: "public/showcase/screens/gates-live.png",
         fullPage: true,
@@ -307,7 +310,10 @@ test("A18 eight specialized gates and browser-local GPS reroute after an accepte
     await nav.screenshot({
       path: `.local/navigation-${info.project.name}.png`,
     });
-    if (info.project.name === "chromium")
+    if (
+      info.project.name === "chromium" &&
+      process.env.CAPTURE_SHOWCASE_ASSETS === "1"
+    )
       await nav.screenshot({
         path: "public/showcase/screens/navigation-live.png",
       });
