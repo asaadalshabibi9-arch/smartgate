@@ -41,6 +41,7 @@ function RouteDemo({
   paused: boolean;
 }) {
   const svg = useRef<SVGSVGElement>(null);
+  const [approached, setApproached] = useState(false);
   useEffect(() => {
     if (paused || window.matchMedia("(prefers-reduced-motion: reduce)").matches)
       svg.current?.pauseAnimations();
@@ -131,11 +132,33 @@ function RouteDemo({
         </div>
         <span>مسار تقريبي</span>
       </div>
-      <button type="button" onClick={() => setAlternate(!alternate)}>
-        {alternate ? "العودة للبوابة ١" : "قبول توصية البوابة ٢ وتحديث المسار"}
+      <button
+        type="button"
+        onClick={() => {
+          if (!approached) {
+            setApproached(true);
+            return;
+          }
+          if (alternate) {
+            setApproached(false);
+            setAlternate(false);
+          } else setAlternate(true);
+        }}
+      >
+        {!approached
+          ? "محاكاة الاقتراب إلى 5 كم وإعادة التقييم"
+          : alternate
+            ? "إعادة تجربة تخصيص البوابة"
+            : "قبول البوابة ٢ وتحديث وجهة Google Maps"}
         <ArrowLeft size={17} />
       </button>
-      <p>هذه التجربة محلية في صفحة العرض؛ لا تغيّر رحلة محفوظة.</p>
+      <p>
+        {!approached
+          ? "١. يخصص النظام البوابة أولًا. اقترب لتجربة المراجعة الثانية."
+          : !alternate
+            ? "٢. تغيّر الازدحام أثناء الرحلة؛ اقترح النظام بوابة مؤهلة بانتظار أقل."
+            : "تم قبول البديل. يفتح السائق Google Maps نحو وجهته الجديدة."}
+      </p>
     </div>
   );
 }
@@ -464,7 +487,7 @@ export function Showcase() {
                   <MapPin size={16} /> موقع متحرك
                 </span>
                 <span>
-                  <Compass size={16} /> مسار يتحدث
+                  <Compass size={16} /> ملاحة Google Maps
                 </span>
                 <span>
                   <ScanLine size={16} /> وصول وقراءات
@@ -750,8 +773,8 @@ export function Showcase() {
           <div>
             <p>
               Next.js وReact لواجهات الأدوار، وSupabase للحسابات والبيانات
-              والصلاحيات والتحديث اللحظي. QR يُقرأ محليًا، وخريطة السائق تستخدم
-              Leaflet. الميناء المصغّر هنا مجسم Three.js مرسوم برمجيًا.
+              والصلاحيات والتحديث اللحظي. QR يُقرأ محليًا، وملاحة السائق عبر
+              Google Maps. الميناء المصغّر هنا مجسم Three.js مرسوم برمجيًا.
             </p>
             <p>
               تتحقق قواعد الخادم من صلاحية كل إجراء. تأكيد العبور مستقل عن

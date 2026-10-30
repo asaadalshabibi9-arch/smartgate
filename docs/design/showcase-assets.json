@@ -109,13 +109,43 @@
       "isCurrentRuntimeScreenshot": true
     },
     {
+      "slug": "create-trip-live",
+      "path": "/showcase/screens/create-trip-live.webp",
+      "source": "A19 local production build",
+      "width": 1280,
+      "height": 1278,
+      "date": "2026-10-30",
+      "data": "synthetic journey and mock GPS",
+      "isCurrentRuntimeScreenshot": true
+    },
+    {
       "slug": "navigation-live",
       "path": "/showcase/screens/navigation-live.webp",
-      "source": "local-production-build",
+      "source": "A19 local production build",
       "width": 968,
-      "height": 751,
+      "height": 545,
       "date": "2026-10-30",
-      "data": "mock GPS coordinates and synthetic demo journey",
+      "data": "synthetic journey and mock GPS",
+      "isCurrentRuntimeScreenshot": true
+    },
+    {
+      "slug": "fleet-live",
+      "path": "/showcase/screens/fleet-live.webp",
+      "source": "A19 local production build",
+      "width": 968,
+      "height": 385,
+      "date": "2026-10-30",
+      "data": "synthetic journey and mock GPS",
+      "isCurrentRuntimeScreenshot": true
+    },
+    {
+      "slug": "recommendation-live",
+      "path": "/showcase/screens/recommendation-live.webp",
+      "source": "A19 local production build",
+      "width": 968,
+      "height": 408,
+      "date": "2026-10-30",
+      "data": "synthetic journey and mock GPS",
       "isCurrentRuntimeScreenshot": true
     }
   ]

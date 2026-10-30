@@ -125,13 +125,17 @@ beforeAll(async () => {
   );
   for (const [key, queue] of [
     ["a", 8],
-    ["b", 2],
+    ["b", 12],
     ["c", 1],
   ] as const)
     await db.query(
-      "insert into public.gates(id,code,name,eligible_operations,queue_length,service_rate_per_hour,is_simulated) values($1,$2,$2,array['container','general_cargo'],$3,15,true)",
+      "insert into public.gates(id,code,name,eligible_operations,queue_length,service_rate_per_hour,is_simulated,latitude,longitude) values($1,$2,$2,array['container','general_cargo'],$3,15,true,19.675,57.704)",
       [ids[key], key, queue],
     );
+  await db.query(
+    "update public.gates set eligible_operations=array['general_cargo'] where id=$1",
+    [ids.c],
+  );
   await db.query(
     "insert into public.operator_gates(profile_id,gate_id) values($1,$2),($1,$3),($4,$5)",
     [ids.operator, ids.a, ids.b, ids.operator2, ids.c],
@@ -143,24 +147,256 @@ afterAll(async () => {
 
 test("A18 refrigerated cargo enforces gate eligibility and independent container verification", async () => {
   const gate = randomUUID();
-  await db.query("insert into public.gates(id,code,name,eligible_operations,queue_length,service_rate_per_hour) values($1,'COLD-TEST','Cold test',array['refrigerated'],3,12)",[gate]);
-  await db.query("insert into public.operator_gates(profile_id,gate_id) values($1,$2)",[ids.operator,gate]);
-  await expect(create({operation_type:"refrigerated",gate_id:ids.a})).rejects.toThrow("ineligible_gate");
-  await expect(create({operation_type:"refrigerated",gate_id:gate,container_number:""})).rejects.toThrow("invalid_input");
-  const cold = await create({operation_type:"refrigerated",gate_id:gate});
-  await command("driver","start",{},randomUUID(),cold);
-  await command("driver","arrive",{},randomUUID(),cold);
-  await command("sim","verify",{qr:cold,plate:"4821",container:"WRONG"},randomUUID(),cold);
-  expect((await rows("select status from public.trips where id=$1",[cold]))[0].status).toBe("verification_failed");
-  await expect(command("operator","request_open",{},randomUUID(),cold)).rejects.toThrow();
-  await command("sim","verify",{qr:cold,plate:"4821",container:"TEST-1"},randomUUID(),cold);
-  const checks = (await rows("select payload->'checks' checks from public.trip_events where trip_id=$1 and event_type='verification_passed'",[cold]))[0].checks as Record<string,unknown>;
+  await db.query(
+    "insert into public.gates(id,code,name,eligible_operations,queue_length,service_rate_per_hour) values($1,'COLD-TEST','Cold test',array['refrigerated'],3,12)",
+    [gate],
+  );
+  await db.query(
+    "insert into public.operator_gates(profile_id,gate_id) values($1,$2)",
+    [ids.operator, gate],
+  );
+  const automatic = await create({
+    operation_type: "refrigerated",
+    gate_id: ids.a,
+  });
+  expect(
+    (await rows("select gate_id from public.trips where id=$1", [automatic]))[0]
+      .gate_id,
+  ).toBe(gate);
+  await expect(
+    create({
+      operation_type: "refrigerated",
+      gate_id: gate,
+      container_number: "",
+    }),
+  ).rejects.toThrow("invalid_input");
+  const cold = await create({ operation_type: "refrigerated", gate_id: gate });
+  await command("driver", "start", {}, randomUUID(), cold);
+  await command("driver", "arrive", {}, randomUUID(), cold);
+  await command(
+    "sim",
+    "verify",
+    { qr: cold, plate: "4821", container: "WRONG" },
+    randomUUID(),
+    cold,
+  );
+  expect(
+    (await rows("select status from public.trips where id=$1", [cold]))[0]
+      .status,
+  ).toBe("verification_failed");
+  await expect(
+    command("operator", "request_open", {}, randomUUID(), cold),
+  ).rejects.toThrow();
+  await command(
+    "sim",
+    "verify",
+    { qr: cold, plate: "4821", container: "TEST-1" },
+    randomUUID(),
+    cold,
+  );
+  const checks = (
+    await rows(
+      "select payload->'checks' checks from public.trip_events where trip_id=$1 and event_type='verification_passed'",
+      [cold],
+    )
+  )[0].checks as Record<string, unknown>;
   expect(checks.container).toBe(true);
-  await command("operator","request_open",{},randomUUID(),cold);
-  await command("sim","barrier_opened",{},randomUUID(),cold);
-  expect((await rows("select completed_at from public.trips where id=$1",[cold]))[0].completed_at).toBeNull();
-  await command("sim","crossing_confirmed",{},randomUUID(),cold);
-  expect((await rows("select status from public.trips where id=$1",[cold]))[0].status).toBe("completed");
+  await command("operator", "request_open", {}, randomUUID(), cold);
+  await command("sim", "barrier_opened", {}, randomUUID(), cold);
+  expect(
+    (await rows("select completed_at from public.trips where id=$1", [cold]))[0]
+      .completed_at,
+  ).toBeNull();
+  await command("sim", "crossing_confirmed", {}, randomUUID(), cold);
+  expect(
+    (await rows("select status from public.trips where id=$1", [cold]))[0]
+      .status,
+  ).toBe("completed");
+});
+
+test("A19 shared GPS is scoped, phase-gated, fresh, session-safe and cleared on completion", async () => {
+  const id = await create({ gate_id: ids.c });
+  expect(
+    (await rows("select gate_id from public.trips where id=$1", [id]))[0]
+      .gate_id,
+  ).toBe(ids.a);
+  await command("driver", "start", {}, randomUUID(), id);
+  const session = randomUUID();
+  const track = (
+    action: string,
+    input: Record<string, unknown> = {},
+    key = session,
+    role = "driver",
+  ) =>
+    as(role, "select public.track_trip_location($1,$2,$3,$4) result", [
+      id,
+      key,
+      action,
+      input,
+    ]);
+  await track("start", { source: "gps" });
+  await track("position", { latitude: 19.5, longitude: 57.5, accuracy_m: 8 });
+  expect(
+    await as("admin", "select * from public.trip_locations where trip_id=$1", [
+      id,
+    ]),
+  ).toHaveLength(1);
+  expect(
+    await as(
+      "operator",
+      "select * from public.trip_locations where trip_id=$1",
+      [id],
+    ),
+  ).toHaveLength(1);
+  for (const role of ["driver2", "operator2", "sim"])
+    expect(
+      await as(role, "select * from public.trip_locations where trip_id=$1", [
+        id,
+      ]),
+    ).toHaveLength(0);
+  await expect(
+    track(
+      "position",
+      { latitude: 19, longitude: 57, accuracy_m: 5 },
+      session,
+      "driver2",
+    ),
+  ).rejects.toThrow("forbidden");
+  await expect(
+    as(
+      "admin",
+      "update public.trip_locations set latitude=0 where trip_id=$1",
+      [id],
+    ),
+  ).rejects.toThrow("permission denied");
+  await expect(
+    track("position", { latitude: 91, longitude: 57, accuracy_m: 5 }),
+  ).rejects.toThrow("invalid_input");
+  await db.query("update public.gates set queue_length=1 where id=$1", [ids.b]);
+  expect(
+    await rows(
+      "select id from public.trip_events where trip_id=$1 and event_type='recommendation_generated'",
+      [id],
+    ),
+  ).toHaveLength(0);
+  await expect(
+    command(
+      "driver",
+      "accept_recommendation",
+      { gate_id: ids.b },
+      randomUUID(),
+      id,
+    ),
+  ).rejects.toThrow("not_approaching");
+  const near = await track("position", {
+    latitude: 19.665,
+    longitude: 57.704,
+    accuracy_m: 8,
+  });
+  expect(near[0].result).toMatchObject({ approaching: true });
+  expect(
+    await rows(
+      "select id from public.trip_events where trip_id=$1 and event_type='recommendation_generated'",
+      [id],
+    ),
+  ).toHaveLength(1);
+  await db.query(
+    "update public.trip_locations set observed_at=now()-interval '2 minutes' where trip_id=$1",
+    [id],
+  );
+  await expect(
+    command(
+      "driver",
+      "accept_recommendation",
+      { gate_id: ids.b },
+      randomUUID(),
+      id,
+    ),
+  ).rejects.toThrow("not_approaching");
+  await track("position", {
+    latitude: 19.665,
+    longitude: 57.704,
+    accuracy_m: 8,
+  });
+  await track("stop");
+  await expect(
+    track("position", { latitude: 19.665, longitude: 57.704, accuracy_m: 8 }),
+  ).rejects.toThrow("tracking_inactive");
+  const second = randomUUID();
+  await track("start", { source: "simulation" }, second);
+  await track("stop", {}, session);
+  expect(
+    (
+      await rows(
+        "select sharing_active from public.trip_locations where trip_id=$1",
+        [id],
+      )
+    )[0].sharing_active,
+  ).toBe(true);
+  await track(
+    "position",
+    { latitude: 19.665, longitude: 57.704, accuracy_m: 5 },
+    second,
+  );
+  expect(
+    await as("sim", "select * from public.trip_locations where trip_id=$1", [
+      id,
+    ]),
+  ).toHaveLength(1);
+  await db.query(
+    "insert into public.operator_gates(profile_id,gate_id) values($1,$2)",
+    [ids.operator2, ids.a],
+  );
+  expect(
+    await as(
+      "operator2",
+      "select * from public.trip_locations where trip_id=$1",
+      [id],
+    ),
+  ).toHaveLength(1);
+  await command(
+    "driver",
+    "accept_recommendation",
+    { gate_id: ids.b },
+    randomUUID(),
+    id,
+  );
+  expect(
+    await as(
+      "operator2",
+      "select * from public.trip_locations where trip_id=$1",
+      [id],
+    ),
+  ).toHaveLength(0);
+  await db.query(
+    "delete from public.operator_gates where profile_id=$1 and gate_id=$2",
+    [ids.operator2, ids.a],
+  );
+  await command("driver", "arrive", {}, randomUUID(), id);
+  expect(
+    (
+      await rows(
+        "select sharing_active from public.trip_locations where trip_id=$1",
+        [id],
+      )
+    )[0].sharing_active,
+  ).toBe(false);
+  await command(
+    "sim",
+    "verify",
+    { qr: id, plate: "4821", container: "TEST-1" },
+    randomUUID(),
+    id,
+  );
+  await command("operator", "request_open", {}, randomUUID(), id);
+  await command("sim", "barrier_opened", {}, randomUUID(), id);
+  await command("sim", "crossing_confirmed", {}, randomUUID(), id);
+  expect(
+    await rows("select * from public.trip_locations where trip_id=$1", [id]),
+  ).toHaveLength(0);
+  await db.query("update public.gates set queue_length=12 where id=$1", [
+    ids.b,
+  ]);
 });
 
 test("FR01 saves a valid trip and rejects invalid input and foreign membership", async () => {
@@ -196,16 +432,17 @@ test("AT10 RLS denies another driver, company and unassigned gate operator", asy
   ).rejects.toThrow("forbidden");
 });
 
-test("FR05 preserves the proposal and reason before driver acceptance", async () => {
-  const events = await rows(
-    "select payload,occurred_at from public.trip_events where trip_id=$1 and event_type='recommendation_generated'",
-    [trip],
-  );
-  expect(events).toHaveLength(1);
-  expect(events[0].payload).toMatchObject({
-    details: { reason: "lower_estimated_wait", wait_before: 32, wait_after: 4 },
-  });
-  expect(events[0].occurred_at).toBeTruthy();
+test("A19 assigns the first gate automatically without an early recommendation", async () => {
+  const row = (
+    await rows("select gate_id from public.trips where id=$1", [trip])
+  )[0];
+  expect(row.gate_id).toBe(ids.a);
+  expect(
+    await rows(
+      "select id from public.trip_events where trip_id=$1 and event_type='recommendation_generated'",
+      [trip],
+    ),
+  ).toHaveLength(0);
 });
 
 test("database constraints reject nonfinite weights and excessive telemetry", async () => {
@@ -244,6 +481,29 @@ test("A02 refuses crossing before verification and barrier opening", async () =>
 });
 test("AT05-AT07 recommendation rejects wrong gate, closed gate and outside-window arrival", async () => {
   await command("driver", "start");
+  await expect(
+    command("driver", "accept_recommendation", { gate_id: ids.b }),
+  ).rejects.toThrow("not_approaching");
+  await db.query("update public.gates set queue_length=1 where id=$1", [ids.b]);
+  const session = randomUUID();
+  await as("driver", "select public.track_trip_location($1,$2,'start',$3)", [
+    trip,
+    session,
+    { source: "simulation" },
+  ]);
+  await as("driver", "select public.track_trip_location($1,$2,'position',$3)", [
+    trip,
+    session,
+    { latitude: 19.665, longitude: 57.704, accuracy_m: 5 },
+  ]);
+  const proposal = await rows(
+    "select payload from public.trip_events where trip_id=$1 and event_type='recommendation_generated'",
+    [trip],
+  );
+  expect(proposal).toHaveLength(1);
+  expect(proposal[0].payload).toMatchObject({
+    details: { phase: "approach", wait_before: 32, wait_after: 4 },
+  });
   await db.query("update public.gates set status='closed' where id=$1", [
     ids.c,
   ]);
@@ -260,6 +520,17 @@ test("AT05-AT07 recommendation rejects wrong gate, closed gate and outside-windo
     appointment_end_at: new Date(Date.now() + 10800000).toISOString(),
   });
   await command("driver", "start", {}, randomUUID(), outside);
+  const outsideSession = randomUUID();
+  await as("driver", "select public.track_trip_location($1,$2,'start',$3)", [
+    outside,
+    outsideSession,
+    { source: "simulation" },
+  ]);
+  await as("driver", "select public.track_trip_location($1,$2,'position',$3)", [
+    outside,
+    outsideSession,
+    { latitude: 19.665, longitude: 57.704, accuracy_m: 5 },
+  ]);
   await expect(
     command(
       "driver",
@@ -383,7 +654,25 @@ test("AT12 missing telemetry remains null and cannot drive a recommendation; cha
     ]),
   ).toHaveLength(1);
   const id = await create();
+  const assigned = (
+    await rows("select gate_id from public.trips where id=$1", [id])
+  )[0].gate_id;
   await command("driver", "start", {}, randomUUID(), id);
+  await db.query(
+    "update public.gates set queue_length=null,service_rate_per_hour=null where id=$1",
+    [assigned],
+  );
+  const session = randomUUID();
+  await as("driver", "select public.track_trip_location($1,$2,'start',$3)", [
+    id,
+    session,
+    { source: "simulation" },
+  ]);
+  await as("driver", "select public.track_trip_location($1,$2,'position',$3)", [
+    id,
+    session,
+    { latitude: 19.665, longitude: 57.704, accuracy_m: 5 },
+  ]);
   await expect(
     command(
       "driver",
@@ -524,10 +813,28 @@ test("A14 administration capability is explicit, audited and idempotent", async 
 
 test("A14 trusted managed provisioning is allowed without reopening public signup", async () => {
   const email = "managed-driver@example.test";
-  const reserved = await as("sim", "select public.administration_command('reserve_account',$1,$2) result", [{email,full_name:"Managed driver",role:"driver",company_id:ids.company,locale:"hi"},randomUUID()]);
-  const uid = (reserved[0].result as {id:string}).id,
+  const reserved = await as(
+    "sim",
+    "select public.administration_command('reserve_account',$1,$2) result",
+    [
+      {
+        email,
+        full_name: "Managed driver",
+        role: "driver",
+        company_id: ids.company,
+        locale: "hi",
+      },
+      randomUUID(),
+    ],
+  );
+  const uid = (reserved[0].result as { id: string }).id,
     key = uid;
-  await expect(as("driver","select private.is_reserved_auth_identity($1,$2)",[uid,email])).rejects.toThrow("permission denied");
+  await expect(
+    as("driver", "select private.is_reserved_auth_identity($1,$2)", [
+      uid,
+      email,
+    ]),
+  ).rejects.toThrow("permission denied");
   await db.exec("set role supabase_auth_admin");
   try {
     await expect(
@@ -542,10 +849,27 @@ test("A14 trusted managed provisioning is allowed without reopening public signu
         { smartgate_managed: true, provisioning_key: randomUUID() },
       ]),
     ).rejects.toThrow("public_signup_disabled");
-    await expect(db.query("insert into auth.users(id,email) values($1,$2)",[uid,"wrong@example.test"])).rejects.toThrow("public_signup_disabled");
-    await expect(db.query("insert into auth.users(id,email,raw_app_meta_data) values($1,$2,$3)",[randomUUID(),email,{smartgate_managed:true,provisioning_key:key}])).rejects.toThrow("public_signup_disabled");
+    await expect(
+      db.query("insert into auth.users(id,email) values($1,$2)", [
+        uid,
+        "wrong@example.test",
+      ]),
+    ).rejects.toThrow("public_signup_disabled");
+    await expect(
+      db.query(
+        "insert into auth.users(id,email,raw_app_meta_data) values($1,$2,$3)",
+        [
+          randomUUID(),
+          email,
+          { smartgate_managed: true, provisioning_key: key },
+        ],
+      ),
+    ).rejects.toThrow("public_signup_disabled");
     // Actual GoTrue order: insert first, then update app_metadata in the transaction.
-    await db.query("insert into auth.users(id,email) values($1,$2)",[uid,email]);
+    await db.query("insert into auth.users(id,email) values($1,$2)", [
+      uid,
+      email,
+    ]);
   } finally {
     await db.exec("reset role");
   }
@@ -556,8 +880,16 @@ test("A14 trusted managed provisioning is allowed without reopening public signu
     company_id: ids.company,
     locale: "hi",
   };
-  await expect(as("sim", "select public.administration_command('profile',$1,$2)", [payload,key])).rejects.toThrow("invalid_input");
-  await db.query("update auth.users set raw_app_meta_data=$1 where id=$2",[{smartgate_managed:true,provisioning_key:key},uid]);
+  await expect(
+    as("sim", "select public.administration_command('profile',$1,$2)", [
+      payload,
+      key,
+    ]),
+  ).rejects.toThrow("invalid_input");
+  await db.query("update auth.users set raw_app_meta_data=$1 where id=$2", [
+    { smartgate_managed: true, provisioning_key: key },
+    uid,
+  ]);
   await as("sim", "select public.administration_command('profile',$1,$2)", [
     payload,
     key,

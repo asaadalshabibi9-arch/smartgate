@@ -1,0 +1,128 @@
+.driver-navigation,
+.fleet-tracking {
+  margin-block: 24px;
+}
+.navigation-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 20px;
+}
+.navigation-heading h2,
+.fleet-tracking h2 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.navigation-heading p {
+  max-width: 760px;
+  margin-block: 8px 18px;
+}
+.navigation-destination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px;
+  background: var(--tint);
+  border-radius: 12px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.navigation-destination small {
+  flex-basis: 100%;
+  color: var(--muted);
+}
+.navigation-controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-block: 16px;
+}
+.navigation-controls .button,
+.google-navigation {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.sharing-consent {
+  display: flex;
+  gap: 10px;
+  align-items: start;
+  margin-top: 16px;
+}
+.sharing-consent input {
+  width: 18px;
+  height: 18px;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+.tracking-state {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 15px 0;
+  border-top: 1px solid var(--border);
+}
+.tracking-state time {
+  font-size: 12px;
+  color: var(--muted);
+}
+.tracking-list {
+  display: flex;
+  flex-direction: column;
+}
+.tracking-item {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  justify-content: space-between;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border);
+}
+.tracking-item > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tracking-item small,
+.tracking-item > div > span:not(.badge) {
+  font-size: 12px;
+  color: var(--muted);
+}
+.tracking-item .text-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.live-position {
+  background: var(--green-bg);
+  color: var(--green);
+}
+@media (max-width: 600px) {
+  .navigation-heading {
+    display: block;
+  }
+  .navigation-controls .button {
+    flex: 1 1 45%;
+    justify-content: center;
+    font-size: 12px;
+    padding: 10px;
+  }
+  .tracking-item {
+    align-items: start;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .tracking-item > div {
+    flex: 1 1 40%;
+  }
+  .tracking-item > a {
+    flex-basis: 100%;
+  }
+  .google-navigation {
+    width: 100%;
+    justify-content: center;
+  }
+}

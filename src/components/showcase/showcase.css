@@ -1404,8 +1404,7 @@
     padding: 8px 10px 15px;
   }
   .scroll-cue {
-    font-size: 8px;
-    bottom: 14px;
+    display: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {

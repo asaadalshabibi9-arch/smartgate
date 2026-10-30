@@ -11,6 +11,8 @@ import {
   ReportLink,
 } from "@/components/trip-detail";
 import { DriverNavigation } from "@/components/driver-navigation";
+import { TrackingView } from "@/components/tracking-view";
+import { isApproaching } from "@/lib/tracking";
 import { Refresh } from "@/components/refresh";
 export default async function TripPage({
   params,
@@ -20,7 +22,8 @@ export default async function TripPage({
   const { locale: raw, id } = await params;
   const locale = localeOf(raw);
   const data = await loadTrip(locale, id);
-  const { profile, trip, report, events, gates } = data;
+  const { profile, trip, report, events, gates, location } = data;
+  const assignedGate = gates.find((g) => g.id === trip.gate_id);
   return (
     <Shell locale={locale} profile={profile}>
       <PageHeading
@@ -43,14 +46,25 @@ export default async function TripPage({
           trip={trip}
           gates={gates}
           canAccept={profile.role === "driver" && trip.status === "in_transit"}
+          approaching={isApproaching(location, assignedGate)}
         />
       ) : null}
       {profile.role === "driver" ? (
         <DriverNavigation
           locale={locale}
-          gates={gates}
-          gateId={trip.gate_id}
+          key={trip.id}
+          tripId={trip.id}
+          destination={assignedGate}
+          lastLocation={location}
           status={trip.status}
+        />
+      ) : null}
+      {profile.role !== "driver" ? (
+        <TrackingView
+          locale={locale}
+          locations={location ? [location] : []}
+          trips={[trip]}
+          gates={gates}
         />
       ) : null}
       <div className="split-panel">

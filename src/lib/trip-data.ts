@@ -30,7 +30,7 @@ export async function loadTrip(locale: Locale, id: string) {
     .maybeSingle();
   if (error) throw new Error("Trip lookup failed");
   if (!trip) notFound();
-  const [events, gates, report] = await Promise.all([
+  const [events, gates, report, location] = await Promise.all([
     db
       .from("trip_events")
       .select("*")
@@ -39,14 +39,22 @@ export async function loadTrip(locale: Locale, id: string) {
       .order("id"),
     db.from("gates").select("*").order("display_order").order("code"),
     db.rpc("entry_report", { p_trip: id }),
+    db.from("trip_locations").select("*").eq("trip_id", id).maybeSingle(),
   ]);
-  if (events.error || gates.error || report.error || !report.data)
+  if (
+    events.error ||
+    gates.error ||
+    report.error ||
+    location.error ||
+    !report.data
+  )
     throw new Error("Journey detail unavailable");
   return {
     profile,
     trip,
     events: events.data,
     gates: gates.data,
+    location: location.data,
     report: report.data as unknown as EntryReport,
   };
 }

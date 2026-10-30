@@ -28,7 +28,13 @@ export function LiveUpdates({
       }, 400);
     }
     const channel = db.channel(`workspace-${profileId}-${crypto.randomUUID()}`);
-    for (const table of ["trips", "trip_events", "gates", "notifications"]) {
+    for (const table of [
+      "trips",
+      "trip_events",
+      "gates",
+      "notifications",
+      "trip_locations",
+    ]) {
       for (const event of ["INSERT", "UPDATE"] as const)
         channel.on(
           "postgres_changes",

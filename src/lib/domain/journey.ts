@@ -4,7 +4,6 @@ export const tripSchema = z
   .object({
     driver_profile_id: z.uuid(),
     truck_id: z.uuid(),
-    gate_id: z.uuid(),
     operation_type: z.enum(["container", "general_cargo", "refrigerated"]),
     cargo_type: z.string().trim().min(1).max(200),
     cargo_weight_kg: z
@@ -104,4 +103,22 @@ export function muscatToISO(value: string) {
 }
 export function muscatInput(value: Date) {
   return new Date(value.getTime() + 4 * 3600000).toISOString().slice(0, 16);
+}
+
+// A19: preview only; the database repeats this selection authoritatively.
+export function initialGate(gates: GateEstimate[], operation: string) {
+  return (
+    gates
+      .filter(
+        (g) =>
+          g.is_simulated &&
+          ["open", "busy"].includes(g.status) &&
+          g.eligible_operations.includes(operation) &&
+          estimateWait(g) !== null,
+      )
+      .sort(
+        (a, b) =>
+          estimateWait(a)! - estimateWait(b)! || a.code.localeCompare(b.code),
+      )[0] ?? null
+  );
 }

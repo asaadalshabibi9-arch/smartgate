@@ -22,6 +22,7 @@ const knownErrors = [
   "recommendation_changed",
   "outside_appointment",
   "missing_telemetry",
+  "not_approaching",
   "simulation_only",
   "idempotency_conflict",
 ];

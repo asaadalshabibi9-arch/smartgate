@@ -1,130 +1,237 @@
 "use client";
-import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
-import { LocateFixed, Navigation, Pause, Play, Map } from "lucide-react";
-import { t, type Locale } from "@/lib/i18n";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  DEMO_ORIGIN,
-  illustrativeRoute,
-  interpolateRoute,
-  validPoint,
-  type Point,
-} from "@/lib/domain/navigation";
-import type { NavigationGate } from "./navigation-map";
-const MapView = dynamic(() => import("./navigation-map"), { ssr: false });
-
+  ExternalLink,
+  LocateFixed,
+  Pause,
+  Play,
+  Navigation,
+} from "lucide-react";
+import { t, dateTime, type Locale } from "@/lib/i18n";
+import { googleNavigationUrl, type SharedLocation } from "@/lib/tracking";
+import { validPoint } from "@/lib/domain/navigation";
+type Destination = {
+  id: string;
+  code: string;
+  latitude: number | null;
+  longitude: number | null;
+};
 export function DriverNavigation({
   locale,
-  gates,
-  gateId,
+  tripId,
+  destination,
   status,
+  lastLocation,
 }: {
   locale: Locale;
-  gates: NavigationGate[];
-  gateId: string | null;
+  tripId: string;
+  destination: Destination | undefined;
   status: string;
+  lastLocation: SharedLocation | null;
 }) {
-  const [mode, setMode] = useState<"idle" | "gps" | "demo">("idle");
-  const [position, setPosition] = useState<Point>(DEMO_ORIGIN);
-  const [accuracy, setAccuracy] = useState<number | null>(null);
+  const [consent, setConsent] = useState(false);
+  const [mode, setMode] = useState<"idle" | "starting" | "gps" | "simulation">(
+    "idle",
+  );
   const [message, setMessage] = useState("");
-  const [tiles, setTiles] = useState(false);
+  const [observedAt, setObservedAt] = useState<string | null>(
+    lastLocation?.observed_at ?? null,
+  );
+  const [near, setNear] = useState(false);
+  const [changed, setChanged] = useState(false);
+  const [now, setNow] = useState<number | null>(null);
+  const session = useRef<string | null>(null);
   const watch = useRef<number | null>(null);
-  const progress = useRef(0);
-  const origin = useRef<Point>(DEMO_ORIGIN);
-  const previousGate = useRef(gateId);
-  const destination = gates.find((g) => g.id === gateId);
-  const pointReady =
-    destination && validPoint(destination.latitude, destination.longitude);
-  const terminal = !["planned", "in_transit"].includes(status);
-  const activeMode = terminal ? "idle" : mode;
-  // GPS remains browser-local. Hide, stop, arrival and unmount all release its watcher.
+  const inflight = useRef(false);
+  const lastSent = useRef(0);
+  const queued = useRef<{
+    lat: number;
+    lng: number;
+    accuracy: number;
+    session: string;
+  } | null>(null);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previousGate = useRef(destination?.id);
+  const active = status === "in_transit";
+  const googleUrl = googleNavigationUrl(
+    destination?.latitude ?? null,
+    destination?.longitude ?? null,
+  );
+  const send = useCallback(
+    async (action: string, id: string, input: Record<string, unknown> = {}) => {
+      const response = await fetch("/api/tracking", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trip_id: tripId,
+          session_id: id,
+          action,
+          ...input,
+        }),
+        keepalive: action === "stop",
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "actionError");
+      return body.data as { observed_at?: string; approaching?: boolean };
+    },
+    [tripId],
+  );
+  const stop = useCallback(
+    (silent = false) => {
+      const id = session.current;
+      session.current = null;
+      queued.current = null;
+      if (retryTimer.current) clearTimeout(retryTimer.current);
+      retryTimer.current = null;
+      if (watch.current !== null) {
+        navigator.geolocation?.clearWatch(watch.current);
+        watch.current = null;
+      }
+      if (id) void send("stop", id).catch(() => {});
+      if (!silent) {
+        setMode("idle");
+        setMessage("sharingPausedHint");
+        setNear(false);
+      }
+    },
+    [send],
+  );
   useEffect(() => {
-    if (activeMode !== "gps") return;
-    if (!navigator.geolocation) return;
-    let live = true;
+    const hide = () => {
+      if (document.hidden) stop();
+    };
+    document.addEventListener("visibilitychange", hide);
+    return () => {
+      document.removeEventListener("visibilitychange", hide);
+      stop(true);
+    };
+  }, [stop]);
+  useEffect(() => {
+    if (!active) stop();
+  }, [active, stop]);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 10000);
+    setNow(Date.now());
+    return () => clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    if (previousGate.current !== destination?.id) {
+      previousGate.current = destination?.id;
+      setChanged(true);
+    }
+  }, [destination?.id]);
+  const publish = useCallback(
+    async function publishFix(
+      lat: number,
+      lng: number,
+      accuracy: number,
+      force = false,
+    ): Promise<void> {
+      const id = session.current;
+      if (!id || !validPoint(lat, lng)) return;
+      if (
+        inflight.current ||
+        (!force && Date.now() - lastSent.current < 5000)
+      ) {
+        queued.current = { lat, lng, accuracy, session: id };
+        if (retryTimer.current) clearTimeout(retryTimer.current);
+        retryTimer.current = setTimeout(
+          () => {
+            const fix = queued.current;
+            queued.current = null;
+            if (fix && session.current === fix.session)
+              void publishFix(fix.lat, fix.lng, fix.accuracy, true);
+          },
+          Math.max(300, 5000 - (Date.now() - lastSent.current)),
+        );
+        return;
+      }
+      inflight.current = true;
+      lastSent.current = Date.now();
+      try {
+        const result = await send("position", id, {
+          latitude: lat,
+          longitude: lng,
+          accuracy_m: Math.min(100000, Math.max(0, accuracy)),
+        });
+        if (session.current !== id) return;
+        setObservedAt(result.observed_at ?? null);
+        setNear(result.approaching ?? false);
+        setMessage(
+          result.approaching ? "nearReassessment" : "sharedLocationLive",
+        );
+      } catch {
+        if (session.current === id) setMessage("sharingError");
+      } finally {
+        inflight.current = false;
+      }
+    },
+    [send],
+  );
+  useEffect(() => {
+    if (mode !== "gps" || !session.current || !active) return;
+    if (!navigator.geolocation) {
+      setMessage("locationError");
+      stop();
+      return;
+    }
+    const id = session.current;
     watch.current = navigator.geolocation.watchPosition(
       ({ coords }) => {
-        if (!live || !validPoint(coords.latitude, coords.longitude)) return;
-        setPosition({ lat: coords.latitude, lng: coords.longitude });
-        setAccuracy(coords.accuracy);
-        setMessage("gpsActive");
+        if (session.current === id && !document.hidden)
+          void publish(coords.latitude, coords.longitude, coords.accuracy);
       },
       (error) => {
-        if (!live) return;
-        setMessage("locationError");
-        // A temporary unavailable/timeout fix must not end an authorized watcher.
-        // Permission denial is terminal; ignore any queued fixes immediately.
+        if (session.current !== id) return;
         if (error.code === 1) {
-          live = false;
-          setMode("idle");
-        }
+          stop();
+          setMessage("locationError");
+        } else setMessage("locationError");
       },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
     );
     return () => {
-      live = false;
-      if (watch.current !== null)
+      if (watch.current !== null) {
         navigator.geolocation.clearWatch(watch.current);
-      watch.current = null;
-    };
-  }, [activeMode]);
-  useEffect(() => {
-    const hide = () => {
-      if (document.hidden) {
-        setMode("idle");
-        setMessage("trackingPaused");
+        watch.current = null;
       }
     };
-    document.addEventListener("visibilitychange", hide);
-    return () => document.removeEventListener("visibilitychange", hide);
-  }, []);
-  useEffect(() => {
-    if (previousGate.current !== gateId) {
-      previousGate.current = gateId;
-      origin.current = position;
-      progress.current = 0;
-    }
-    if (
-      activeMode !== "demo" ||
-      !destination ||
-      !validPoint(destination.latitude, destination.longitude)
-    )
-      return;
-    const path = illustrativeRoute(origin.current, {
-      lat: destination.latitude!,
-      lng: destination.longitude!,
-    });
-    const timer = window.setInterval(() => {
-      progress.current = Math.min(1, progress.current + 0.008);
-      setPosition(interpolateRoute(path, progress.current));
-      if (progress.current >= 1) {
-        setMode("idle");
-        setMessage("demoDestinationReached");
-      }
-    }, 400);
-    return () => window.clearInterval(timer);
-    // The origin is intentionally captured when a run starts or the assigned gate changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeMode, gateId, destination?.latitude, destination?.longitude]);
-  function startGps() {
-    if (!navigator.geolocation) {
-      setMessage("locationError");
-      return;
-    }
+  }, [mode, active, publish, stop]);
+  async function start(source: "gps" | "simulation") {
+    if (!consent || !active) return;
+    stop(true);
+    const id = crypto.randomUUID();
+    session.current = id;
+    setMode("starting");
     setMessage("working");
-    setMode("gps");
-  }
-  function startDemo() {
-    if (progress.current >= 1 || mode !== "demo") {
-      origin.current = DEMO_ORIGIN;
-      progress.current = 0;
-      setPosition(DEMO_ORIGIN);
+    setObservedAt(null);
+    setNear(false);
+    lastSent.current = 0;
+    try {
+      await send("start", id, { source });
+      if (session.current !== id) {
+        void send("stop", id).catch(() => {});
+        return;
+      }
+      setMode(source);
+      setMessage("awaitingPosition");
+      if (source === "simulation") await publish(19.6, 57.6, 5, true);
+    } catch {
+      if (session.current === id) {
+        session.current = null;
+        setMode("idle");
+        setMessage("sharingError");
+      }
     }
-    setAccuracy(null);
-    setMessage("demoNavigationActive");
-    setMode("demo");
   }
+  const displayedAt =
+    mode === "idle" ? (lastLocation?.observed_at ?? observedAt) : observedAt;
+  const fresh =
+    active &&
+    ["gps", "simulation"].includes(mode) &&
+    observedAt &&
+    now !== null &&
+    now - Date.parse(observedAt) <= 90000;
   return (
     <section
       className="panel driver-navigation"
@@ -133,82 +240,120 @@ export function DriverNavigation({
       <div className="navigation-heading">
         <div>
           <h2 id="navigation-title">
-            <Navigation size={22} aria-hidden /> {t(locale, "journeyMap")}
+            <Navigation size={22} aria-hidden />
+            {t(locale, "openGoogleMaps")}
           </h2>
-          <p>{t(locale, "approximateRoute")}</p>
+          <p>{t(locale, "googleExternalHint")}</p>
         </div>
-        <span className="badge">
-          {t(locale, activeMode === "gps" ? "gpsActive" : "simulated")}
-        </span>
       </div>
       <div className="navigation-destination" aria-live="polite">
         <span>{t(locale, "currentGate")}</span>
         <strong>{destination?.code ?? t(locale, "unavailable")}</strong>
-        <span>
-          {destination?.eligible_operations
-            .map((o) => t(locale, o))
-            .join(" / ")}
-        </span>
-        <small>{t(locale, "routeFollowsGate")}</small>
+        <small>{t(locale, "googleDestinationHint")}</small>
       </div>
-      <MapView
-        locale={locale}
-        gates={gates}
-        destination={destination}
-        position={position}
-        tiles={tiles}
-      />
+      {changed ? (
+        <p className="notice" role="status">
+          {t(locale, "gateDestinationChanged")}
+        </p>
+      ) : null}
+      {googleUrl ? (
+        <a
+          className="button primary google-navigation"
+          href={googleUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <ExternalLink size={19} aria-hidden />
+          {t(locale, "openGoogleMaps")}
+        </a>
+      ) : (
+        <p className="notice">{t(locale, "mapUnconfigured")}</p>
+      )}
+      <label className="sharing-consent">
+        <input
+          type="checkbox"
+          checked={consent}
+          onChange={(e) => {
+            setConsent(e.target.checked);
+            if (!e.target.checked) stop();
+          }}
+        />
+        <span>{t(locale, "shareLocationConsent")}</span>
+      </label>
       <div className="navigation-controls">
         <button
           type="button"
-          className="button primary"
-          onClick={startGps}
-          disabled={terminal || activeMode === "gps"}
+          className="button secondary"
+          onClick={() => void start("gps")}
+          disabled={
+            !active || !consent || mode === "gps" || mode === "starting"
+          }
         >
-          <LocateFixed size={18} aria-hidden /> {t(locale, "enableGps")}
+          <LocateFixed size={18} aria-hidden />
+          {t(locale, "startSharing")}
         </button>
         <button
           type="button"
           className="button secondary"
-          onClick={startDemo}
-          disabled={terminal || !pointReady || activeMode === "demo"}
+          onClick={() => void start("simulation")}
+          disabled={
+            !active || !consent || mode === "simulation" || mode === "starting"
+          }
         >
-          <Play size={18} aria-hidden /> {t(locale, "runDemoRoute")}
+          <Play size={18} aria-hidden />
+          {t(locale, "runDemoRoute")}
         </button>
+        {mode === "simulation" &&
+        destination &&
+        validPoint(destination.latitude, destination.longitude) ? (
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() =>
+              void publish(
+                destination.latitude! - 0.01,
+                destination.longitude! - 0.01,
+                5,
+                true,
+              )
+            }
+          >
+            {t(locale, "simulateApproach")}
+          </button>
+        ) : null}
         <button
           type="button"
           className="button secondary"
-          onClick={() => {
-            setMode("idle");
-            setMessage("trackingPaused");
-          }}
-          disabled={activeMode === "idle"}
+          onClick={() => stop()}
+          disabled={mode === "idle"}
         >
-          <Pause size={18} aria-hidden /> {t(locale, "stopTracking")}
-        </button>
-        <button
-          type="button"
-          className="button secondary"
-          aria-pressed={tiles}
-          onClick={() => setTiles((v) => !v)}
-        >
-          <Map size={18} aria-hidden /> {t(locale, "toggleBaseMap")}
+          <Pause size={18} aria-hidden />
+          {t(locale, "stopTracking")}
         </button>
       </div>
+      <div className="tracking-state">
+        <span className="badge">
+          {t(
+            locale,
+            mode === "simulation"
+              ? "simulated"
+              : fresh
+                ? "sharedLocationLive"
+                : "lastKnownLocation",
+          )}
+        </span>
+        <time>
+          {t(locale, "updated")}: {dateTime(locale, displayedAt)}
+        </time>
+      </div>
       <p role="status">
-        {terminal
+        {!active
           ? t(locale, "trackingEnded")
           : message
             ? t(locale, message)
-            : t(locale, "navigationPrivacy")}
-        {accuracy !== null && activeMode === "gps"
-          ? ` · ${t(locale, "accuracy")}: ${Math.ceil(accuracy).toLocaleString(locale)} ${t(locale, "meters")}`
-          : ""}
+            : t(locale, "sharingPausedHint")}
       </p>
-      {!pointReady ? (
-        <p className="notice">{t(locale, "mapUnconfigured")}</p>
-      ) : null}
-      <p className="calculation-note">{t(locale, "navigationPrivacy")}</p>
+      {near ? <p className="notice">{t(locale, "nearReassessment")}</p> : null}
     </section>
   );
 }

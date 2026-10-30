@@ -146,8 +146,8 @@ export const copy = {
   ],
   newScenarioRun: ["إنشاء تجربة جديدة", "Create a new run"],
   scenarioTemplate: [
-    "قالب سيناريو تجريبي؛ اختر السائق والشاحنة والبوابة، ثم اتبع خطوات السيناريو من حسابات الأدوار.",
-    "Demo scenario template: select driver, truck and gate, then follow the scenario instructions using each role’s account.",
+    "قالب تجريبي: اختر السائق والشاحنة وأدخل الشحنة والموعد؛ يخصص النظام البوابة تلقائيًا، ثم اتبع خطوات السيناريو.",
+    "Demo template: choose driver and truck, enter cargo and appointment; the system assigns the gate, then follow the scenario steps.",
   ],
   scenarioExpired: [
     "انتهت نافذة هذه التجربة. تبقى للعرض؛ أنشئ تجربة جديدة لموعد صالح.",
@@ -165,8 +165,8 @@ export const copy = {
     "Company saves the journey → driver starts and reports arrival → administrator verifies → operator requests opening → administrator records success, then separately confirms crossing.",
   ],
   scenarioStep_recommend: [
-    "جهز A بطابور 8 ومعدل 15، وB بطابور 3 ومعدل 15، مع نافذة موعد تشمل الوصول. ابدأ من A واقبل توصية B من حساب السائق.",
-    "Set A to queue 8/rate 15 and B to queue 3/rate 15, with an appointment covering arrival. Start from A and accept B’s recommendation using the driver account.",
+    "أنشئ رحلة ليخصص النظام بوابتها. ارفع انتظار البوابة الحالية ووفر بديلًا مؤهلًا أقل انتظارًا من المحاكاة. ابدأ الرحلة وشارك موقعًا تجريبيًا داخل 5 كم، ثم اقبل التوصية من حساب السائق.",
+    "Create a journey for automatic gate assignment. Simulate a higher wait at its gate and a better eligible alternative. Start the journey, share a demo position within 5 km, then accept the recommendation as the driver.",
   ],
   scenarioStep_mismatchPlate: [
     "بعد الوصول، غيّر اللوحة المقروءة إلى قيمة مختلفة قبل التحقق، واترك QR والحاوية مطابقين. راجع نتائج القراءات في السجل.",

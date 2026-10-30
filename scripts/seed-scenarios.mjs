@@ -69,6 +69,7 @@ try {
     const now = Date.now();
     let id;
     let changedC = false;
+    const restoreTelemetry = [];
     try {
       if (scenario.code === "SC10") {
         await rpc("simulation", "update_demo_gate", {
@@ -113,6 +114,24 @@ try {
           ).toISOString(),
         },
       });
+      const allocated = await company
+        .from("trips")
+        .select("gate_id")
+        .eq("id", id)
+        .single();
+      if (allocated.error) throw new Error("Assigned gate missing");
+      const assignedGate = gates.data.find(
+        (g) => g.id === allocated.data.gate_id,
+      );
+      if (scenario.code === "SC10")
+        await rpc("simulation", "update_demo_gate", {
+          p_gate: assignedGate.id,
+          p_input: {
+            status: "open",
+            queue_length: "",
+            service_rate_per_hour: "",
+          },
+        });
       const command = (actor, name, payload = {}) =>
         rpc(actor, "apply_trip_command", {
           p_trip: id,
@@ -122,10 +141,56 @@ try {
         });
       if (!["SC10", "SC13"].includes(scenario.code)) {
         await command(driverKey, "start");
-        if (scenario.code === "SC02")
-          await command(driverKey, "accept_recommendation", {
-            gate_id: gateB.id,
+        if (scenario.code === "SC02") {
+          const alternative = gates.data.find(
+            (g) =>
+              g.id !== assignedGate.id &&
+              g.eligible_operations.includes("container") &&
+              ["open", "busy"].includes(g.status),
+          );
+          if (
+            !alternative ||
+            assignedGate.latitude === null ||
+            assignedGate.longitude === null
+          )
+            throw new Error(
+              "Configure an eligible alternative and demo coordinates first",
+            );
+          for (const [gate, queue] of [
+            [assignedGate, 1000],
+            [alternative, 0],
+          ]) {
+            restoreTelemetry.push(gate);
+            await rpc("simulation", "update_demo_gate", {
+              p_gate: gate.id,
+              p_input: {
+                status: "open",
+                queue_length: queue,
+                service_rate_per_hour: 15,
+              },
+            });
+          }
+          const session = randomUUID();
+          await rpc(driverKey, "track_trip_location", {
+            p_trip: id,
+            p_session: session,
+            p_action: "start",
+            p_input: { source: "simulation" },
           });
+          await rpc(driverKey, "track_trip_location", {
+            p_trip: id,
+            p_session: session,
+            p_action: "position",
+            p_input: {
+              latitude: assignedGate.latitude - 0.01,
+              longitude: assignedGate.longitude - 0.01,
+              accuracy_m: 5,
+            },
+          });
+          await command(driverKey, "accept_recommendation", {
+            gate_id: alternative.id,
+          });
+        }
         if (scenario.code !== "SC09") {
           await command(driverKey, "arrive");
           await command("simulation", "verify", {
@@ -134,14 +199,17 @@ try {
             container: scenario.code === "SC05" ? "WRONG-CONTAINER" : container,
           });
           if (!["SC03", "SC04", "SC05", "SC08"].includes(scenario.code)) {
-            await command("operator", "request_open");
+            await command(general ? "operator2" : "operator", "request_open");
             if (scenario.code === "SC06")
               await command("simulation", "barrier_failed");
             else {
               if (scenario.code === "SC12")
                 for (let failure = 0; failure < 2; failure++) {
                   await command("simulation", "barrier_failed");
-                  await command("operator", "request_open");
+                  await command(
+                    general ? "operator2" : "operator",
+                    "request_open",
+                  );
                 }
               await command("simulation", "barrier_opened");
               if (scenario.code !== "SC07") {
@@ -170,6 +238,15 @@ try {
       if (id) await rpc("simulation", "reset_demo_trip", { p_trip: id });
       throw error;
     } finally {
+      for (const gate of restoreTelemetry)
+        await rpc("simulation", "update_demo_gate", {
+          p_gate: gate.id,
+          p_input: {
+            status: gate.status,
+            queue_length: gate.queue_length ?? "",
+            service_rate_per_hour: gate.service_rate_per_hour ?? "",
+          },
+        });
       if (changedC)
         await rpc("simulation", "update_demo_gate", {
           p_gate: gateC.id,

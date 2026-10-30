@@ -2,6 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
+import { t } from "../../src/lib/i18n";
 import type { Database } from "../../src/types/database";
 const accounts = JSON.parse(
   readFileSync(".local/demo-accounts.json", "utf8"),
@@ -51,7 +52,7 @@ test("A18 public 3D story, presentation, route change, exceptions and detailed e
     .click();
   await expect(page).toHaveURL(/\/ar\/showcase$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    /كل رحلة دخول/,
+    /دخول أذكى للشاحنات/,
   );
   await expect(page.locator(".port-scene")).toHaveAttribute(
     "data-ready",
@@ -88,7 +89,13 @@ test("A18 public 3D story, presentation, route change, exceptions and detailed e
   ).toBeVisible();
   await page
     .getByRole("button", {
-      name: "قبول توصية البوابة ٢ وتحديث المسار",
+      name: "محاكاة الاقتراب إلى 5 كم وإعادة التقييم",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("button", {
+      name: "قبول البوابة ٢ وتحديث وجهة Google Maps",
       exact: true,
     })
     .click();
@@ -101,9 +108,11 @@ test("A18 public 3D story, presentation, route change, exceptions and detailed e
   await page.screenshot({
     path: `.local/showcase-driver-${info.project.name}.png`,
   });
-  await scenes.getByRole("button", { name: "شركة النقل", exact: true }).click();
+  await scenes
+    .getByRole("button", { name: "تخطيط الرحلة", exact: true })
+    .click();
   await page
-    .getByRole("button", { name: "تكبير شاشة شركة النقل", exact: true })
+    .getByRole("button", { name: "تكبير شاشة تخطيط الرحلة", exact: true })
     .click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect
@@ -119,7 +128,7 @@ test("A18 public 3D story, presentation, route change, exceptions and detailed e
     .click();
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await scenes
-    .getByRole("button", { name: "الاستثناءات", exact: true })
+    .getByRole("button", { name: "التعامل مع الاستثناءات", exact: true })
     .click();
   await page
     .getByRole("button", { name: "اختلاف الهوية", exact: true })
@@ -150,84 +159,74 @@ test("A18 public 3D story, presentation, route change, exceptions and detailed e
   expect(errors).toEqual([]);
 });
 
-test("A18 eight specialized gates and browser-local GPS reroute after an accepted assignment", async ({
+test("A19 initial assignment, shared GPS permissions, 5km reassessment and Google destination", async ({
   page,
   context,
+  browser,
+  baseURL,
 }, info) => {
-  test.setTimeout(180_000);
-  await page.addInitScript(() => {
-    const events: unknown[] = [];
-    Object.assign(window, { __navigationEvents: events });
-    const watch = navigator.geolocation.watchPosition.bind(
-      navigator.geolocation,
-    );
-    const clear = navigator.geolocation.clearWatch.bind(navigator.geolocation);
-    navigator.geolocation.watchPosition = (success, error, options) => {
-      events.push(["watch", document.visibilityState]);
-      return watch(
-        (p) => {
-          events.push(["position", p.coords.accuracy]);
-          success(p);
-        },
-        (e) => {
-          events.push(["error", e.code]);
-          error?.(e);
-        },
-        options,
-      );
-    };
-    navigator.geolocation.clearWatch = (id) => {
-      events.push(["clear", id]);
-      clear(id);
-    };
-    document.addEventListener("visibilitychange", () =>
-      events.push(["visibility", document.visibilityState]),
-    );
-  });
+  test.setTimeout(180000);
   const company = await client("company"),
-    driver = await client("driver");
+    driver = await client("driver"),
+    sim = await client("simulation"),
+    other = await client("company2");
+  const gates = (await company.from("gates").select("*").order("display_order"))
+    .data!;
+  const a = gates.find((g) => g.code === "GATE-A")!,
+    b = gates.find((g) => g.code === "GATE-B")!,
+    c = gates.find((g) => g.code === "GATE-C")!;
+  const driverContext = await browser.newContext({
+    baseURL,
+    viewport: page.viewportSize() ?? { width: 1280, height: 720 },
+    geolocation: { latitude: 19.6, longitude: 57.6, accuracy: 8 },
+    permissions: ["geolocation"],
+  });
+  const operatorContext = await browser.newContext({
+    baseURL,
+    viewport: page.viewportSize() ?? { width: 1280, height: 720 },
+  });
+  const driverPage = await driverContext.newPage(),
+    operatorPage = await operatorContext.newPage();
+  const change = async (gate: typeof a, queue: number, status = "open") =>
+    expect(
+      (
+        await sim.rpc("update_demo_gate", {
+          p_gate: gate.id,
+          p_input: { status, queue_length: queue, service_rate_per_hour: 15 },
+        })
+      ).error,
+    ).toBeNull();
   try {
-    const gates = (
-      await company.from("gates").select("*").order("display_order")
-    ).data!;
     expect(gates).toHaveLength(8);
-    expect(
-      gates.filter((g) => g.eligible_operations.includes("container")),
-    ).toHaveLength(3);
-    expect(
-      gates.filter((g) => g.eligible_operations.includes("general_cargo")),
-    ).toHaveLength(3);
-    expect(
-      gates.filter((g) => g.eligible_operations.includes("refrigerated")),
-    ).toHaveLength(2);
+    await change(a, 1);
+    await change(b, 6);
     await login(page, "company");
-    await page.goto("/ar/gates");
-    await expect(page.locator(".gate-card")).toHaveCount(8);
-    await page.screenshot({
-      path: `.local/gates-eight-${info.project.name}.png`,
-      fullPage: true,
-    });
+    await page.goto("/ar/company/new");
+    await expect(
+      page.getByRole("combobox", { name: t("ar", "gate"), exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByText(t("ar", "automaticGate"), { exact: true }),
+    ).toBeVisible();
     if (
       info.project.name === "chromium" &&
       process.env.CAPTURE_SHOWCASE_ASSETS === "1"
     )
       await page.screenshot({
-        path: "public/showcase/screens/gates-live.png",
+        path: "public/showcase/screens/create-trip-live.png",
         fullPage: true,
       });
     const truck = (await company.from("trucks").select("*").limit(1)).data![0];
-    const gateA = gates.find((g) => g.code === "GATE-A")!,
-      gateB = gates.find((g) => g.code === "GATE-B")!;
     const created = await company.rpc("create_entry_trip", {
       p_key: randomUUID(),
       p_input: {
         driver_profile_id: account("driver").profile_id,
         truck_id: truck.id,
-        gate_id: gateA.id,
+        gate_id: c.id,
         operation_type: "container",
-        cargo_type: "A18 navigation verification — simulated",
+        cargo_type: "A19 GPS sharing verification — synthetic",
         cargo_weight_kg: 12000,
-        container_number: "DEMO-NAV",
+        container_number: "DEMO-A19",
         planned_departure_at: new Date().toISOString(),
         appointment_start_at: new Date(Date.now() - 3600000).toISOString(),
         appointment_end_at: new Date(Date.now() + 3600000).toISOString(),
@@ -236,6 +235,9 @@ test("A18 eight specialized gates and browser-local GPS reroute after an accepte
     });
     expect(created.error).toBeNull();
     const id = created.data!;
+    const trip = (await company.from("trips").select("*").eq("id", id).single())
+      .data!;
+    expect(trip.gate_id).toBe(a.id);
     expect(
       (
         await driver.rpc("apply_trip_command", {
@@ -246,70 +248,151 @@ test("A18 eight specialized gates and browser-local GPS reroute after an accepte
         })
       ).error,
     ).toBeNull();
-    await login(page, "driver");
-    await page.goto(`/ar/trips/${id}`);
-    const nav = page.locator(".driver-navigation");
+    await login(driverPage, "driver");
+    await driverPage.goto("/ar/trips/" + id);
+    const nav = driverPage.locator(".driver-navigation");
     await nav.scrollIntoViewIfNeeded();
-    await expect(nav.locator(".navigation-destination strong")).toHaveText(
-      "GATE-A",
+    const google = nav.getByRole("link", {
+      name: t("ar", "openGoogleMaps"),
+      exact: true,
+    });
+    const url = new URL((await google.getAttribute("href"))!);
+    expect(url.origin).toBe("https://www.google.com");
+    expect(url.searchParams.get("destination")).toBe(
+      a.latitude + "," + a.longitude,
     );
-    await page
-      .getByRole("button", { name: "تشغيل رحلة محاكاة", exact: true })
-      .click();
-    await expect(nav.getByRole("status")).toContainText("وضع المحاكاة");
-    await page
-      .getByRole("button", { name: "إيقاف التتبع", exact: true })
-      .click();
-    await context.grantPermissions(["geolocation"]);
-    await context.setGeolocation({
-      latitude: 19.66,
-      longitude: 57.67,
-      accuracy: 12,
+    await expect(nav.locator(".driver-map")).toHaveCount(0);
+    const share = nav.getByRole("button", {
+      name: t("ar", "startSharing"),
+      exact: true,
     });
-    await page.getByRole("button", { name: "تفعيل GPS", exact: true }).click();
-    await expect(nav.getByRole("status")).toContainText("GPS فعلي نشط");
-    await context.setGeolocation({
-      latitude: 19.662,
-      longitude: 57.675,
-      accuracy: 8,
-    });
-    await expect(nav.getByRole("status")).toContainText(/(?:8|٨)/);
+    await expect(share).toBeDisabled();
+    await nav.getByRole("checkbox").check();
+    await share.click();
+    await expect
+      .poll(
+        async () =>
+          (
+            await company
+              .from("trip_locations")
+              .select("latitude")
+              .eq("trip_id", id)
+              .single()
+          ).data?.latitude,
+      )
+      .toBe(19.6);
+    expect(
+      (await other.from("trip_locations").select("*").eq("trip_id", id)).data,
+    ).toEqual([]);
+    expect(
+      (await sim.from("trip_locations").select("*").eq("trip_id", id)).data,
+    ).toEqual([]);
+    await page.goto("/ar/company");
+    await expect(
+      page
+        .locator(".fleet-tracking")
+        .getByRole("link", { name: trip.request_number, exact: true }),
+    ).toBeVisible();
+    await login(operatorPage, "operator");
+    await operatorPage.goto("/ar/operator");
+    await expect(
+      operatorPage
+        .locator(".fleet-tracking")
+        .getByRole("link", { name: trip.request_number, exact: true }),
+    ).toBeVisible();
+    if (
+      info.project.name === "chromium" &&
+      process.env.CAPTURE_SHOWCASE_ASSETS === "1"
+    )
+      await page
+        .locator(".fleet-tracking")
+        .screenshot({ path: "public/showcase/screens/fleet-live.png" });
+    await change(a, 8);
+    await change(b, 1);
     expect(
       (
         await driver.rpc("apply_trip_command", {
           p_trip: id,
           p_command: "accept_recommendation",
-          p_payload: { gate_id: gateB.id },
+          p_payload: { gate_id: b.id },
           p_key: randomUUID(),
         })
-      ).error,
-    ).toBeNull();
-    await page
-      .getByRole("button", { name: "تحديث الحالة", exact: true })
+      ).error?.message,
+    ).toContain("not_approaching");
+    await driverPage.bringToFront();
+    if (await share.isEnabled()) await share.click();
+    await driverContext.setGeolocation({
+      latitude: 19.665,
+      longitude: 57.704,
+      accuracy: 8,
+    });
+    await expect
+      .poll(
+        async () =>
+          (
+            await company
+              .from("trip_locations")
+              .select("latitude")
+              .eq("trip_id", id)
+              .single()
+          ).data?.latitude,
+        { timeout: 20000 },
+      )
+      .toBe(19.665);
+    await expect(
+      page
+        .locator(".tracking-item")
+        .filter({ has: page.getByRole("link", { name: trip.request_number }) })
+        .getByRole("link", { name: t("ar", "viewInGoogleMaps") }),
+    ).toHaveAttribute("href", /query=19\.665%2C57\.704/, { timeout: 25000 });
+    await driverPage
+      .getByRole("button", { name: t("ar", "refresh"), exact: true })
       .click();
+    if (
+      info.project.name === "chromium" &&
+      process.env.CAPTURE_SHOWCASE_ASSETS === "1"
+    )
+      await driverPage
+        .getByRole("heading", { name: t("ar", "recommendation"), exact: true })
+        .locator("..")
+        .screenshot({
+          path: "public/showcase/screens/recommendation-live.png",
+        });
+    await driverPage
+      .getByRole("button", { name: t("ar", "accept"), exact: true })
+      .click();
+    await expect
+      .poll(
+        async () =>
+          (await company.from("trips").select("gate_id").eq("id", id).single())
+            .data?.gate_id,
+      )
+      .toBe(b.id);
     await expect(nav.locator(".navigation-destination strong")).toHaveText(
       "GATE-B",
     );
-    await page
-      .getByRole("button", { name: "إيقاف التتبع", exact: true })
-      .click();
-    await expect(nav.getByRole("status")).toContainText("التتبع متوقف");
-    await context.setGeolocation({
-      latitude: 19.663,
-      longitude: 57.676,
-      accuracy: 5,
-    });
-    await expect(nav.getByRole("status")).toContainText("التتبع متوقف");
-    expect(
-      await page.evaluate(() =>
-        (
-          window as unknown as { __navigationEvents: unknown[][] }
-        ).__navigationEvents.some((e) => e[0] === "clear"),
+    await expect(google).toHaveAttribute(
+      "href",
+      new RegExp(
+        "destination=" + encodeURIComponent(b.latitude + "," + b.longitude),
       ),
-    ).toBe(true);
-    await nav.screenshot({
-      path: `.local/navigation-${info.project.name}.png`,
-    });
+    );
+    await nav
+      .getByRole("button", { name: t("ar", "stopTracking"), exact: true })
+      .click();
+    await expect
+      .poll(
+        async () =>
+          (
+            await company
+              .from("trip_locations")
+              .select("sharing_active")
+              .eq("trip_id", id)
+              .single()
+          ).data?.sharing_active,
+      )
+      .toBe(false);
+    await expect(nav.locator("time")).not.toContainText(t("ar", "unavailable"));
     if (
       info.project.name === "chromium" &&
       process.env.CAPTURE_SHOWCASE_ASSETS === "1"
@@ -317,22 +400,31 @@ test("A18 eight specialized gates and browser-local GPS reroute after an accepte
       await nav.screenshot({
         path: "public/showcase/screens/navigation-live.png",
       });
-    expect(
-      (
-        await driver
-          .from("trips")
-          .select("status,gate_id,completed_at")
-          .eq("id", id)
-          .single()
-      ).data,
-    ).toMatchObject({
-      status: "in_transit",
-      gate_id: gateB.id,
-      completed_at: null,
+    await nav.screenshot({
+      path: ".local/google-sharing-" + info.project.name + ".png",
     });
-    await page.goto("/ar/gates");
+    const cross = await driverContext.request.post("/api/tracking", {
+      headers: { origin: "https://example.invalid" },
+      data: { trip_id: id, session_id: randomUUID(), action: "stop" },
+    });
+    expect(cross.status()).toBe(403);
   } finally {
-    await company.auth.signOut({ scope: "local" });
-    await driver.auth.signOut({ scope: "local" });
+    for (const gate of [a, b])
+      expect(
+        (
+          await sim.rpc("update_demo_gate", {
+            p_gate: gate.id,
+            p_input: {
+              status: gate.status,
+              queue_length: gate.queue_length ?? "",
+              service_rate_per_hour: gate.service_rate_per_hour ?? "",
+            },
+          })
+        ).error,
+      ).toBeNull();
+    await driverContext.close();
+    await operatorContext.close();
+    for (const db of [company, driver, sim, other])
+      await db.auth.signOut({ scope: "local" });
   }
 });

@@ -126,44 +126,21 @@ test("automatic fallback refreshes another actor's change and administration rem
   }
 });
 
-test("location requires a user action and never invents configured gate positions", async ({
+test("gate positions open externally without requesting GPS or embedding a map", async ({
   page,
-  context,
 }) => {
   await login(page, "company");
   await page.goto("/en/gates");
-  await expect(
-    page.getByText(t("en", "mapConfiguredHint"), { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByTitle("Map", { exact: true })).toHaveCount(0);
-  await context.grantPermissions(["geolocation"]);
-  await context.setGeolocation({
-    latitude: 23.6,
-    longitude: 58.4,
-    accuracy: 50,
+  const links = page.getByRole("link", {
+    name: "View in Google Maps",
+    exact: true,
   });
-  await page
-    .getByRole("button", { name: "Show my location", exact: true })
-    .click();
-  await expect(
-    page.getByText(/Approximate location accuracy \(m\): 50/),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Open external map" }),
-  ).toHaveAttribute("href", /mlat=23.6&mlon=58.4/);
-  await expect(page.getByTitle("Map", { exact: true })).toHaveCount(0);
-  await page.route("https://www.openstreetmap.org/**", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "text/html",
-      body: "<p>Map provider fixture</p>",
-    }),
+  await expect(links).toHaveCount(8);
+  await expect(links.first()).toHaveAttribute(
+    "href",
+    /^https:\/\/www\.google\.com\/maps\/search\//,
   );
-  await page.getByRole("button", { name: "Map", exact: true }).click();
-  await expect(page.getByTitle("Map", { exact: true })).toHaveAttribute(
-    "src",
-    /marker=23.6,58.4/,
-  );
+  await expect(page.locator("iframe")).toHaveCount(0);
 });
 
 test("camera QR decoding fills a reference, stops capture and never submits verification", async ({
@@ -488,8 +465,8 @@ test("AT01–AT12: four real accounts complete entry, recover exceptions and ret
     const gateA = gates.data!.find((g) => g.code === "GATE-A")!;
     const gateB = gates.data!.find((g) => g.code === "GATE-B")!;
     for (const [gate, queue, status] of [
-      [gateA, 8, "busy"],
-      [gateB, 3, "open"],
+      [gateA, 1, "open"],
+      [gateB, 6, "busy"],
     ] as const) {
       expect(
         (
@@ -514,9 +491,9 @@ test("AT01–AT12: four real accounts complete entry, recover exceptions and ret
     await company.page
       .getByRole("combobox", { name: "Truck", exact: true })
       .selectOption(truck.id);
-    await company.page
-      .getByRole("combobox", { name: "Gate", exact: true })
-      .selectOption(gateA.id);
+    await expect(
+      company.page.getByRole("combobox", { name: "Gate", exact: true }),
+    ).toHaveCount(0);
     await company.page
       .getByLabel("Cargo description", { exact: true })
       .fill("E2E synthetic shipment");
@@ -567,6 +544,48 @@ test("AT01–AT12: four real accounts complete entry, recover exceptions and ret
     await expect(
       driver.page.getByRole("button", { name: "Report arrival", exact: true }),
     ).toBeVisible();
+    for (const [gate, queue] of [
+      [gateA, 8],
+      [gateB, 3],
+    ] as const)
+      expect(
+        (
+          await simDb.rpc("update_demo_gate", {
+            p_gate: gate.id,
+            p_input: {
+              status: "open",
+              queue_length: queue,
+              service_rate_per_hour: 15,
+            },
+          })
+        ).error,
+      ).toBeNull();
+    const positionDb = await client("driver");
+    const locationSession = randomUUID();
+    expect(
+      (
+        await positionDb.rpc("track_trip_location", {
+          p_trip: id!,
+          p_session: locationSession,
+          p_action: "start",
+          p_input: { source: "simulation" },
+        })
+      ).error,
+    ).toBeNull();
+    expect(
+      (
+        await positionDb.rpc("track_trip_location", {
+          p_trip: id!,
+          p_session: locationSession,
+          p_action: "position",
+          p_input: { latitude: 19.665, longitude: 57.704, accuracy_m: 5 },
+        })
+      ).error,
+    ).toBeNull();
+    await positionDb.auth.signOut({ scope: "local" });
+    await driver.page
+      .getByRole("button", { name: "Refresh status", exact: true })
+      .click();
     await click(driver.page, "Accept recommendation");
     await expect.poll(async () => (await state()).gate_id).toBe(gateB.id);
     await click(driver.page, "Report arrival");

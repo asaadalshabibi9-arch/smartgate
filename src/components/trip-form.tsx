@@ -2,6 +2,7 @@
 import { useActionState, useState, type ChangeEvent } from "react";
 import { createTripAction } from "@/app/actions";
 import { t, type Locale } from "@/lib/i18n";
+import { initialGate, estimateWait } from "@/lib/domain/journey";
 import type { Tables } from "@/types/database";
 
 type Props = {
@@ -133,18 +134,26 @@ export function TripForm({
             })),
             false,
           )}
-          {select(
-            "gate_id",
-            "gate",
-            gates
-              .filter((g) =>
-                g.eligible_operations.includes(values.operation_type),
-              )
-              .map((g) => ({
-                id: g.id,
-                label: `${g.code} — ${g.eligible_operations.map((o) => t(locale, o)).join(" / ")}`,
-              })),
-          )}
+          <div className="form-field">
+            <span>{t(locale, "automaticGate")}</span>
+            <div className="notice">
+              <strong>
+                {initialGate(gates, values.operation_type)?.code ??
+                  t(locale, "noInitialGate")}
+              </strong>
+              <p>{t(locale, "automaticGateHint")}</p>
+              <small>
+                {t(locale, "wait")}:{" "}
+                {estimateWait(
+                  initialGate(gates, values.operation_type) ?? {
+                    queue_length: null,
+                    service_rate_per_hour: null,
+                  },
+                ) ?? t(locale, "unavailable")}{" "}
+                {t(locale, "minutes")}
+              </small>
+            </div>
+          </div>
           {field("container_number", "containerNumber")}
           {field("cargo_type", "cargoType")}
           {field("cargo_weight_kg", "cargoWeight", "number")}

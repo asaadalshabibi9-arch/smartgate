@@ -9,6 +9,7 @@ import {
   Plus,
 } from "lucide-react";
 import { Shell, TripTable, PageHeading } from "@/components/workspace";
+import { TrackingView } from "@/components/tracking-view";
 import { Refresh } from "@/components/refresh";
 import { GateCards } from "@/components/gates";
 import { requireIdentity, rolePath } from "@/lib/auth";
@@ -25,11 +26,16 @@ export default async function Dashboard({
   const { db, profile } = await requireIdentity(locale);
   if (rolePath[profile.role] !== workspace)
     redirect(`/${locale}/${rolePath[profile.role]}`);
-  const [tripsResult, gatesResult] = await Promise.all([
+  const [tripsResult, gatesResult, locationsResult] = await Promise.all([
     db.from("trips").select("*").order("created_at", { ascending: false }),
     db.from("gates").select("*").order("display_order").order("code"),
+    db
+      .from("trip_locations")
+      .select("*")
+      .order("observed_at", { ascending: false, nullsFirst: false })
+      .limit(50),
   ]);
-  if (tripsResult.error || gatesResult.error)
+  if (tripsResult.error || gatesResult.error || locationsResult.error)
     throw new Error("Workspace query failed");
   const trips = tripsResult.data;
   const gates = gatesResult.data;
@@ -105,6 +111,16 @@ export default async function Dashboard({
           </div>
         ))}
       </div>
+      {["company_admin", "gate_operator", "demo_admin"].includes(
+        profile.role,
+      ) ? (
+        <TrackingView
+          locale={locale}
+          locations={locationsResult.data ?? []}
+          trips={trips}
+          gates={gates}
+        />
+      ) : null}
       <section className="panel" id="journeys">
         <div className="section-heading">
           <div>

@@ -241,11 +241,13 @@ export function Recommendation({
   trip,
   gates,
   canAccept,
+  approaching = false,
 }: {
   locale: Locale;
   trip: Trip;
   gates: Tables<"gates">[];
   canAccept: boolean;
+  approaching?: boolean;
 }) {
   const now = new Date();
   const result = recommend(gates, trip, now);
@@ -271,7 +273,11 @@ export function Recommendation({
           <dd>{dateTime(locale, result.eta.toISOString())}</dd>
         </div>
       </dl>
-      {result.gate ? (
+      {!approaching ? (
+        <p className="notice" style={{ marginTop: 16 }}>
+          {t(locale, "nearReassessment")}
+        </p>
+      ) : result.gate ? (
         <div className="notice" style={{ marginTop: 20 }}>
           <h3>
             {t(locale, "proposedGate")}: {result.gate.code}
@@ -358,7 +364,11 @@ export function TripControls({
                 command="verify"
                 label="verify"
               >
-                <QrScanner key={trip.id} locale={locale} initialValue={trip.id} />
+                <QrScanner
+                  key={trip.id}
+                  locale={locale}
+                  initialValue={trip.id}
+                />
                 <label>
                   {t(locale, "plate")}
                   <input

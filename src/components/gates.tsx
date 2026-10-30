@@ -3,6 +3,7 @@ import { ActionForm } from "./action-form";
 import { Badge } from "./workspace";
 import { dateTime, t, type Locale } from "@/lib/i18n";
 import { estimateWait } from "@/lib/domain/journey";
+import { googlePositionUrl } from "@/lib/tracking";
 import type { Tables } from "@/types/database";
 import { PanelsTopLeft, Clock3, Truck } from "lucide-react";
 export function GateCards({
@@ -30,7 +31,7 @@ export function GateCards({
                   {gate.display_order < 999
                     ? gate.display_order.toLocaleString(locale)
                     : ""}{" "}
-                  ? {t(locale, "simulated")}
+                  · {t(locale, "simulated")}
                 </small>
               </div>
               <Badge locale={locale} status={gate.status} />
@@ -38,6 +39,16 @@ export function GateCards({
             <p className="gate-specialty">
               {gate.eligible_operations.map((o) => t(locale, o)).join(" / ")}
             </p>
+            {googlePositionUrl(gate.latitude, gate.longitude) ? (
+              <a
+                className="text-link"
+                href={googlePositionUrl(gate.latitude, gate.longitude)!}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {t(locale, "viewInGoogleMaps")}
+              </a>
+            ) : null}
             <div className="gate-metrics">
               <div>
                 <span>
