@@ -161,7 +161,6 @@ test("A18 public 3D story, presentation, route change, exceptions and detailed e
 
 test("A19 initial assignment, shared GPS permissions, 5km reassessment and Google destination", async ({
   page,
-  context,
   browser,
   baseURL,
 }, info) => {

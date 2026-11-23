@@ -21,9 +21,13 @@ export function TrackingView({
 }) {
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
-    setNow(Date.now());
-    const timer = setInterval(() => setNow(Date.now()), 10000);
-    return () => clearInterval(timer);
+    const tick = () => setNow(Date.now());
+    const first = setTimeout(tick, 0);
+    const timer = setInterval(tick, 10000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(timer);
+    };
   }, []);
   return (
     <section
